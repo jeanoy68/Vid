@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ten Together · Educational Demo</title>
+<title>Five Together · Educational Demo</title>
 <!--
   ============================================================
   EDUCATIONAL DEMO
@@ -159,16 +159,15 @@
   .note ul { margin: 8px 0 0 18px; }
 
   /* ---------- Breakpoints ---------- */
-  @media (max-width: 1200px) { .grid { grid-template-columns: repeat(4, 1fr); } }
-  @media (max-width: 1000px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(3, 1fr); } }
   @media (max-width: 700px)  { .grid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 450px)  { .grid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 
-  <h1>🎓 ten together · educational demo</h1>
-  <div class="sub">same live stream · ten embeds · no autoplay · learn the API</div>
+  <h1>🎓 five together · educational demo</h1>
+  <div class="sub">same live stream · five embeds · no autoplay · learn the API</div>
 
   <!-- Toolbar: shows programmatic control of many players -->
   <div class="controls">
@@ -187,8 +186,8 @@
       <li><strong>Embedding:</strong> each card hosts a YouTube IFrame API player via <code>new YT.Player()</code>.</li>
       <li><strong>No autoplay:</strong> <code>autoplay: 0</code> — the user must press play. This respects browser autoplay policies.</li>
       <li><strong>Programmatic control:</strong> the toolbar calls <code>playVideo()</code>, <code>pauseVideo()</code>, <code>unMute()</code>, and <code>seekTo()</code> on all players.</li>
-      <li><strong>Responsive CSS Grid:</strong> 5 → 4 → 3 → 2 → 1 columns as the viewport shrinks.</li>
-      <li><strong>View counting (important):</strong> YouTube counts a view per real viewer/session, not per iframe. Ten iframes on one device ≠ ten views. Embedding many copies is a <em>layout/API</em> exercise, not a way to inflate analytics.</li>
+      <li><strong>Responsive CSS Grid:</strong> 5 → 3 → 2 → 1 columns as the viewport shrinks.</li>
+      <li><strong>View counting (important):</strong> YouTube counts a view per real viewer/session, not per iframe. Five iframes on one device ≠ five views. Embedding many copies is a <em>layout/API</em> exercise, not a way to inflate analytics.</li>
       <li><strong>Terms of Service:</strong> artificially generating views violates YouTube's ToS and can get a channel penalized. Keep learning honest.</li>
     </ul>
   </div>
@@ -197,8 +196,8 @@
     /* ============================================================
        CONFIG
        ============================================================ */
-    const VIDEO_ID = "XHSz1LPLhPk";  // the live stream to embed
-    const COUNT    = 10;             // how many players to build
+    const VIDEO_ID = "ImE6H5LmbsE";  // the live stream to embed
+    const COUNT    = 5;              // how many players to build
 
     /* ============================================================
        STATE
