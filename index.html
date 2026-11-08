@@ -1,297 +1,736 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Five Together · Educational Demo</title>
-<!--
-  ============================================================
-  EDUCATIONAL DEMO
-  ------------------------------------------------------------
-  Purpose: Learn how to
-    1. Embed a YouTube video multiple times using the IFrame API
-    2. Build a responsive CSS Grid layout
-    3. Control many players programmatically (play/pause/sync)
-    4. Respect YouTube's Terms of Service (no view inflation)
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apprentissage Bilingue TTS + Caméra</title>
+    <style>
+        :root {
+            --en-red: #d9534f;
+            --fr-blue: #0275d8;
+            --border-color: #eeeeee;
+            --success-green: #28a745;
+        }
 
-  This page is NOT a view-bot. Each iframe is a real player,
-  but YouTube's anti-spam counts views per real viewer, not
-  per iframe. Use this to study the API, not to fake views.
-  ============================================================
--->
-<style>
-  /* ---------- Base layout ---------- */
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { box-sizing: border-box; }
 
-  body {
-    background: #0b1a2f;
-    min-height: 100vh;
-    font-family: system-ui, "Segoe UI", Roboto, sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px;
-    color: #bdd3e8;
-  }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #ffffff;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
 
-  h1 {
-    font-weight: 400;
-    letter-spacing: 2px;
-    margin-bottom: 6px;
-    color: #f0e6d2;
-  }
+        .input-section {
+            width: 100%;
+            max-width: 850px;
+            margin-bottom: 30px;
+        }
 
-  .sub {
-    font-size: 0.85rem;
-    color: #7a9bbd;
-    margin-bottom: 18px;
-    letter-spacing: 0.5px;
-  }
+        textarea {
+            width: 100%;
+            height: 100px;
+            background: #fafafa;
+            color: #333;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 16px;
+            resize: none;
+            outline: none;
+            font-family: inherit;
+        }
 
-  /* ---------- Toolbar ---------- */
-  .controls {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
+        .controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
 
-  button {
-    background: #e6c27a;
-    border: none;
-    border-radius: 60px;
-    padding: 10px 22px;
-    font-size: 0.9rem;
-    font-weight: 700;
-    color: #1e2f3f;
-    cursor: pointer;
-    box-shadow: 0 4px 0 #9e7d46;
-    transition: transform 0.05s;
-  }
-  button:active { transform: translateY(3px); box-shadow: 0 1px 0 #9e7d46; }
-  button.secondary {
-    background: #2e4b6b;
-    color: #d6e6f7;
-    box-shadow: 0 4px 0 #0a1622;
-  }
+        button {
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
 
-  /* ---------- Responsive grid of players ---------- */
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr); /* 5 columns on wide screens */
-    gap: 12px;
-    width: 100%;
-    max-width: 1600px;
-  }
+        #loadBtn { background: #f0f0f0; color: #555; }
+        #playBtn { background: #ff0000; color: white; }
+        #pauseBtn { background: #f0ad4e; color: white; display: none; }
+        #stopBtn { background: #333; color: white; }
+        #loopBtn { background: #f0f0f0; color: #555; border: 2px solid transparent; }
+        #recordBtn { background: #6c5ce7; color: white; }
+        #recordBtn.recording { background: #e17055; animation: pulse 1.2s infinite; }
 
-  /* Each player card */
-  .card {
-    background: #1e354d;
-    border-radius: 20px;
-    padding: 8px;
-    box-shadow: 0 8px 0 #0a1622, 0 0 0 1px #2d4c6b inset;
-    display: flex;
-    flex-direction: column;
-  }
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.02); }
+            100% { opacity: 1; transform: scale(1); }
+        }
 
-  .card .tag {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 2px 6px 8px 6px;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #92b1cf;
-    font-weight: 600;
-  }
+        #loopBtn.active {
+            background: var(--success-green);
+            color: white;
+            border-color: #1e7e34;
+        }
 
-  .card .tag .badge {
-    background: #3e6a92;
-    border-radius: 20px;
-    padding: 2px 8px;
-    font-size: 0.6rem;
-    color: #e8f0fa;
-  }
-  .card .tag .badge.muted { background: #5a4a3a; color: #f0d6b0; }
+        button:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.9; }
+        button:disabled { opacity: 0.2; cursor: not-allowed; }
 
-  /* 16:9 wrapper so each iframe keeps aspect ratio */
-  .frame {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    border-radius: 14px;
-    overflow: hidden;
-    background: #000;
-    box-shadow: inset 0 0 0 1px #2d4c6b;
-  }
+        .video-stage {
+            width: 100%;
+            max-width: 850px;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            border: 1px solid var(--border-color);
+            margin-top: 10px;
+            position: relative;
+            background: #ffffff;
+            aspect-ratio: 16 / 9;
+        }
 
-  .frame iframe {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border: none;
-  }
+        #canvasPreview {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+        }
 
-  /* ---------- Educational footer ---------- */
-  .note {
-    margin-top: 22px;
-    font-size: 0.8rem;
-    color: #8ba9c7;
-    text-align: left;
-    max-width: 900px;
-    line-height: 1.7;
-    padding: 16px 22px;
-    background: #0e1f2e;
-    border-radius: 16px;
-    border: 1px solid #2a4867;
-  }
-  .note strong { color: #e6c27a; }
-  .note code {
-    background: #132b45;
-    padding: 1px 6px;
-    border-radius: 6px;
-    color: #cfe1f5;
-    font-size: 0.75rem;
-  }
-  .note ul { margin: 8px 0 0 18px; }
+        #cameraVideo {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+            top: 0;
+            left: 0;
+        }
 
-  /* ---------- Breakpoints ---------- */
-  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(3, 1fr); } }
-  @media (max-width: 700px)  { .grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 450px)  { .grid { grid-template-columns: 1fr; } }
-</style>
+        .status-msg {
+            margin-top: 12px;
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            min-height: 22px;
+            padding: 0 15px;
+            line-height: 1.4;
+        }
+
+        .status-msg.success { color: var(--success-green); font-weight: bold; }
+        .status-msg.error { color: var(--en-red); font-weight: bold; }
+        .status-msg.info { color: #0275d8; }
+
+        .help-banner {
+            width: 100%;
+            max-width: 850px;
+            background: #fff8e1;
+            border: 1px solid #ffe0b2;
+            border-radius: 10px;
+            padding: 12px 16px;
+            font-size: 13px;
+            color: #7a5c00;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .help-banner.visible { display: block; }
+        .help-banner code {
+            background: #fff3cd;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
 </head>
 <body>
 
-  <h1>🎓 five together · educational demo</h1>
-  <div class="sub">same live stream · five embeds · no autoplay · learn the API</div>
+    <div id="helpBanner" class="help-banner">
+        ⚠️ <strong>La caméra ne fonctionne pas ?</strong> Ouvrez cette page via un serveur local, pas en double-cliquant sur le fichier.
+        Exemple : dans le dossier du fichier, tapez <code>python -m http.server 8000</code> puis ouvrez <code>http://localhost:8000</code>
+    </div>
 
-  <!-- Toolbar: shows programmatic control of many players -->
-  <div class="controls">
-    <button id="playAll">▶ Play all</button>
-    <button id="pauseAll" class="secondary">⏸ Pause all</button>
-    <button id="syncAll" class="secondary">⟳ Sync to main</button>
-  </div>
-
-  <!-- Cards are generated by JS below -->
-  <div class="grid" id="grid"></div>
-
-  <!-- Educational explanation -->
-  <div class="note">
-    <strong>What this demo teaches:</strong>
-    <ul>
-      <li><strong>Embedding:</strong> each card hosts a YouTube IFrame API player via <code>new YT.Player()</code>.</li>
-      <li><strong>No autoplay:</strong> <code>autoplay: 0</code> — the user must press play. This respects browser autoplay policies.</li>
-      <li><strong>Programmatic control:</strong> the toolbar calls <code>playVideo()</code>, <code>pauseVideo()</code>, <code>unMute()</code>, and <code>seekTo()</code> on all players.</li>
-      <li><strong>Responsive CSS Grid:</strong> 5 → 3 → 2 → 1 columns as the viewport shrinks.</li>
-      <li><strong>View counting (important):</strong> YouTube counts a view per real viewer/session, not per iframe. Five iframes on one device ≠ five views. Embedding many copies is a <em>layout/API</em> exercise, not a way to inflate analytics.</li>
-      <li><strong>Terms of Service:</strong> artificially generating views violates YouTube's ToS and can get a channel penalized. Keep learning honest.</li>
-    </ul>
-  </div>
-
-  <script>
-    /* ============================================================
-       CONFIG
-       ============================================================ */
-    const VIDEO_ID = "Qpe_uzvvs9g";  // the live stream to embed
-    const COUNT    = 5;              // how many players to build
-
-    /* ============================================================
-       STATE
-       ============================================================ */
-    const players = [];   // will hold YT.Player instances
-    let apiReady = false;
-
-    /* ============================================================
-       STEP 1 — Build the cards + placeholder divs
-       Each player needs a DOM element with a unique id.
-       ============================================================ */
-    const grid = document.getElementById("grid");
-
-    for (let i = 0; i < COUNT; i++) {
-      // Player 0 is the "main" (unmuted). Others are muted by default.
-      const isMuted = i !== 0;
-
-      const card = document.createElement("div");
-      card.className = "card";
-      card.innerHTML = `
-        <div class="tag">
-          <span>${i === 0 ? "Main" : "View " + i}</span>
-          <span class="badge ${isMuted ? "muted" : ""}">
-            ${isMuted ? "muted" : "sound"}
-          </span>
+    <div class="input-section">
+        <textarea id="textInput" placeholder="Ligne 1 : Anglais&#10;Ligne 2 : Français&#10;Ligne 3 : Anglais..."></textarea>
+        <div class="controls">
+            <button id="loadBtn" onclick="processText()">1. Charger la liste</button>
+            <button id="playBtn" onclick="startPlayAll()" disabled>▶ Lire tout</button>
+            <button id="pauseBtn" onclick="togglePause()">⏸ Pause</button>
+            <button id="stopBtn" onclick="stopSpeech()">⏹ Arrêter</button>
+            <button id="loopBtn" onclick="toggleLoop()">🔁 Boucle : OFF</button>
+            <button id="recordBtn" onclick="toggleRecording()" disabled>⏺ Enregistrer</button>
         </div>
-        <div class="frame">
-          <div id="player-${i}"></div>
-        </div>
-      `;
-      grid.appendChild(card);
-    }
+        <div id="statusMsg" class="status-msg"></div>
+    </div>
 
-    /* ============================================================
-       STEP 2 — Load the YouTube IFrame API
-       The API calls window.onYouTubeIframeAPIReady when loaded.
-       ============================================================ */
-    const tag = document.createElement("script");
-    tag.src = "https://www.youtube.com/iframe_api";
-    document.head.appendChild(tag);
+    <div class="video-stage">
+        <canvas id="canvasPreview" width="1280" height="720"></canvas>
+        <video id="cameraVideo" autoplay playsinline muted></video>
+    </div>
 
-    /* ============================================================
-       STEP 3 — Create players once the API is ready
-       ============================================================ */
-    window.onYouTubeIframeAPIReady = function () {
-      apiReady = true;
+    <script>
+        // ==================== ÉTAT GLOBAL ====================
+        const synth = window.speechSynthesis;
+        let sentenceData = [];
+        let currentIndex = 0;
+        let repeatCounter = 0;
+        let isPlaying = false;
+        let isPaused = false;
+        let isLooping = false;
 
-      for (let i = 0; i < COUNT; i++) {
-        const isMuted = i !== 0;
+        const canvas = document.getElementById('canvasPreview');
+        const ctx = canvas.getContext('2d');
+        const videoElement = document.getElementById('cameraVideo');
+        let cameraStream = null;
+        let cameraReady = false;
+        let animationFrameId = null;
+        let lastRenderTime = 0;
 
-        players[i] = new YT.Player("player-" + i, {
-          videoId: VIDEO_ID,
-          playerVars: {
-            autoplay: 0,          // no autoplay — user must click
-            mute: isMuted ? 1 : 0,
-            controls: 1,
-            modestbranding: 1,
-            rel: 0,
-            playsinline: 1
-          }
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isRecording = false;
+        const RECORD_DURATION_MS = 120000;
+        let recordTimer = null;
+
+        let audioCtx = null;
+        let ttsDestination = null;
+        let ttsStream = null;
+
+        function setStatus(msg, type = '') {
+            const el = document.getElementById('statusMsg');
+            el.textContent = msg;
+            el.className = 'status-msg' + (type ? ' ' + type : '');
+            console.log('[STATUS]', msg);
+        }
+
+        // ==================== CAMÉRA ====================
+        async function initCamera() {
+            const banner = document.getElementById('helpBanner');
+
+            // 1. Contexte sécurisé ?
+            if (!window.isSecureContext) {
+                setStatus('❌ Caméra bloquée : ouvrez via http://localhost (pas file://)', 'error');
+                banner.classList.add('visible');
+                drawStaticScreen('Contexte non sécurisé');
+                return;
+            }
+
+            // 2. API disponible ?
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                setStatus('❌ getUserMedia non disponible dans ce navigateur', 'error');
+                banner.classList.add('visible');
+                drawStaticScreen('API caméra indisponible');
+                return;
+            }
+
+            // 3. Essayer d'accéder
+            try {
+                setStatus('Demande d\'accès à la caméra...', 'info');
+
+                try {
+                    cameraStream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+                        audio: false
+                    });
+                } catch (constraintErr) {
+                    if (constraintErr.name === 'OverconstrainedError') {
+                        console.warn('Contraintes non supportées, réessai sans contraintes');
+                        cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    } else {
+                        throw constraintErr;
+                    }
+                }
+
+                videoElement.srcObject = cameraStream;
+                await videoElement.play();
+                cameraReady = true;
+                banner.classList.remove('visible');
+                setStatus('✅ Caméra active', 'success');
+                startCanvasRendering();
+
+            } catch (err) {
+                let msg = '❌ ';
+                switch (err.name) {
+                    case 'NotAllowedError':
+                    case 'PermissionDeniedError':
+                        msg += 'Permission refusée. Cliquez sur l\'icône 📷/🔒 dans la barre d\'adresse, autorisez la caméra, puis rechargez.';
+                        break;
+                    case 'NotFoundError':
+                    case 'DevicesNotFoundError':
+                        msg += 'Aucune caméra détectée sur cet appareil.';
+                        break;
+                    case 'NotReadableError':
+                    case 'TrackStartError':
+                        msg += 'Caméra déjà utilisée par une autre application (Zoom, Teams, OBS, autre onglet...).';
+                        break;
+                    case 'OverconstrainedError':
+                        msg += 'La caméra ne supporte pas la résolution demandée.';
+                        break;
+                    case 'SecurityError':
+                        msg += 'Contexte non sécurisé (HTTPS ou localhost requis).';
+                        banner.classList.add('visible');
+                        break;
+                    case 'AbortError':
+                        msg += 'Accès interrompu par le système.';
+                        break;
+                    default:
+                        msg += err.name + ' – ' + err.message;
+                }
+                console.error('getUserMedia error:', err);
+                setStatus(msg, 'error');
+                drawStaticScreen('Caméra indisponible');
+            }
+        }
+
+        function drawStaticScreen(text) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#999';
+            ctx.font = 'bold 32px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2 - 20);
+            ctx.font = '18px "Segoe UI", sans-serif';
+            ctx.fillStyle = '#bbb';
+            ctx.fillText('Ouvrez cette page via http://localhost pour autoriser la caméra', canvas.width / 2, canvas.height / 2 + 30);
+            ctx.font = '16px "Segoe UI", sans-serif';
+            ctx.fillStyle = '#ccc';
+            ctx.fillText('(python -m http.server 8000 → http://localhost:8000)', canvas.width / 2, canvas.height / 2 + 70);
+        }
+
+        function drawRoundRect(ctx, x, y, w, h, r) {
+            if (w < 2 * r) r = w / 2;
+            if (h < 2 * r) r = h / 2;
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r);
+            ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r);
+            ctx.arcTo(x, y, x + w, y, r);
+            ctx.closePath();
+        }
+
+        function startCanvasRendering() {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+            function render(timestamp) {
+                if (timestamp - lastRenderTime < 33) {
+                    animationFrameId = requestAnimationFrame(render);
+                    return;
+                }
+                lastRenderTime = timestamp;
+
+                const W = canvas.width;
+                const H = canvas.height;
+
+                // Fond blanc
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, W, H);
+
+                // Phrase active au centre
+                if (sentenceData.length > 0) {
+                    const activeIndex = isPlaying ? currentIndex : 0;
+                    const item = sentenceData[activeIndex];
+
+                    if (item) {
+                        const textColor = item.isEnglish ? '#d9534f' : '#0275d8';
+
+                        ctx.font = 'bold 56px "Segoe UI", sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+
+                        const maxWidth = W - 200;
+                        const words = item.text.split(' ');
+                        const lines = [];
+                        let currentLine = '';
+
+                        words.forEach(word => {
+                            const testLine = currentLine ? currentLine + ' ' + word : word;
+                            const metrics = ctx.measureText(testLine);
+                            if (metrics.width > maxWidth && currentLine) {
+                                lines.push(currentLine);
+                                currentLine = word;
+                            } else {
+                                currentLine = testLine;
+                            }
+                        });
+                        lines.push(currentLine);
+
+                        const lineHeight = 72;
+                        const totalHeight = lines.length * lineHeight;
+                        const startY = (H / 2) - (totalHeight / 2) - 20;
+
+                        lines.forEach((line, i) => {
+                            ctx.fillStyle = textColor;
+                            ctx.fillText(line, W / 2, startY + (i * lineHeight));
+                        });
+
+                        // Badge EN/FR
+                        const badgeText = item.isEnglish ? 'EN' : 'FR';
+                        const badgeColor = item.isEnglish ? '#d9534f' : '#0275d8';
+                        ctx.font = 'bold 16px "Segoe UI", sans-serif';
+                        const badgeWidth = ctx.measureText(badgeText).width + 28;
+                        ctx.fillStyle = badgeColor;
+                        drawRoundRect(ctx, 30, 30, badgeWidth, 36, 18);
+                        ctx.fill();
+                        ctx.fillStyle = '#fff';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(badgeText, 30 + badgeWidth / 2, 49);
+
+                        // Compteur de répétition
+                        if (isPlaying && item.maxRepeats > 1) {
+                            ctx.font = '20px "Segoe UI", sans-serif';
+                            ctx.fillStyle = '#aaa';
+                            ctx.fillText(`Répétition ${repeatCounter + 1} / ${item.maxRepeats}`, W / 2, H - 90);
+                        }
+                    }
+
+                    // Barre de progression
+                    if (isPlaying) {
+                        const progress = (currentIndex + (repeatCounter / (sentenceData[currentIndex]?.maxRepeats || 1))) / sentenceData.length;
+                        const barWidth = W * 0.6;
+                        const barX = (W - barWidth) / 2;
+                        const barY = H - 50;
+
+                        ctx.fillStyle = '#eee';
+                        drawRoundRect(ctx, barX, barY, barWidth, 8, 4);
+                        ctx.fill();
+
+                        ctx.fillStyle = '#6c5ce7';
+                        drawRoundRect(ctx, barX, barY, barWidth * Math.min(progress, 1), 8, 4);
+                        ctx.fill();
+                    }
+                } else {
+                    ctx.font = 'bold 36px "Segoe UI", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#ccc';
+                    ctx.fillText('Chargez une liste pour commencer', W / 2, H / 2);
+                }
+
+                // Écran caméra (picture-in-picture)
+                if (cameraReady && videoElement.readyState >= 2) {
+                    const camW = 320;
+                    const camH = 180;
+                    const camX = W - camW - 24;
+                    const camY = H - camH - 24;
+
+                    // Ombre
+                    ctx.save();
+                    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+                    ctx.shadowBlur = 20;
+                    ctx.shadowOffsetY = 8;
+                    drawRoundRect(ctx, camX, camY, camW, camH, 16);
+                    ctx.fillStyle = '#000';
+                    ctx.fill();
+                    ctx.restore();
+
+                    // Clip + vidéo miroir
+                    ctx.save();
+                    drawRoundRect(ctx, camX, camY, camW, camH, 16);
+                    ctx.clip();
+                    ctx.translate(camX + camW, camY);
+                    ctx.scale(-1, 1);
+                    ctx.drawImage(videoElement, 0, 0, camW, camH);
+                    ctx.restore();
+
+                    // Bordure blanche
+                    ctx.save();
+                    drawRoundRect(ctx, camX, camY, camW, camH, 16);
+                    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    ctx.restore();
+
+                    // Badge LIVE
+                    ctx.save();
+                    drawRoundRect(ctx, camX + 10, camY + 10, 60, 24, 12);
+                    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+                    ctx.fill();
+                    ctx.fillStyle = '#ff4757';
+                    ctx.beginPath();
+                    ctx.arc(camX + 24, camY + 22, 5, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 11px "Segoe UI", sans-serif';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('LIVE', camX + 36, camY + 23);
+                    ctx.restore();
+                } else if (!cameraReady) {
+                    // Placeholder caméra
+                    const camW = 320;
+                    const camH = 180;
+                    const camX = W - camW - 24;
+                    const camY = H - camH - 24;
+                    ctx.save();
+                    drawRoundRect(ctx, camX, camY, camW, camH, 16);
+                    ctx.fillStyle = '#1a1a1a';
+                    ctx.fill();
+                    ctx.strokeStyle = '#333';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    ctx.fillStyle = '#666';
+                    ctx.font = '13px "Segoe UI", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('📷 Caméra désactivée', camX + camW / 2, camY + camH / 2);
+                    ctx.restore();
+                }
+
+                animationFrameId = requestAnimationFrame(render);
+            }
+
+            animationFrameId = requestAnimationFrame(render);
+        }
+
+        // ==================== TEXTE & TTS ====================
+        function processText() {
+            stopSpeech();
+            const input = document.getElementById('textInput').value;
+            const lines = input.split('\n').map(l => l.trim()).filter(l => l !== "");
+
+            sentenceData = [];
+
+            lines.forEach((line, index) => {
+                const isEnglish = index % 2 === 0;
+                sentenceData.push({
+                    text: line,
+                    lang: isEnglish ? 'en-US' : 'fr-FR',
+                    isEnglish: isEnglish,
+                    maxRepeats: isEnglish ? 3 : 2
+                });
+            });
+
+            if (sentenceData.length > 0) {
+                document.getElementById('playBtn').disabled = false;
+                document.getElementById('recordBtn').disabled = false;
+                setStatus(`✅ Liste chargée : ${sentenceData.length} lignes`, 'success');
+                if (!animationFrameId) startCanvasRendering();
+            } else {
+                document.getElementById('playBtn').disabled = true;
+                document.getElementById('recordBtn').disabled = true;
+                setStatus('Aucune ligne valide', 'error');
+            }
+        }
+
+        function speakStep() {
+            if (!isPlaying || isPaused) return;
+
+            if (currentIndex >= sentenceData.length) {
+                if (isLooping) {
+                    currentIndex = 0;
+                    repeatCounter = 0;
+                    setTimeout(speakStep, 1000);
+                } else {
+                    stopSpeech();
+                }
+                return;
+            }
+
+            const currentItem = sentenceData[currentIndex];
+            const utterance = new SpeechSynthesisUtterance(currentItem.text);
+            utterance.lang = currentItem.lang;
+
+            const voices = synth.getVoices();
+            const voice = voices.find(v => v.lang.startsWith(currentItem.lang));
+            if (voice) utterance.voice = voice;
+
+            utterance.onend = () => {
+                if (!isPlaying || isPaused) return;
+                repeatCounter++;
+                if (repeatCounter < currentItem.maxRepeats) {
+                    setTimeout(speakStep, 400);
+                } else {
+                    currentIndex++;
+                    repeatCounter = 0;
+                    setTimeout(speakStep, 800);
+                }
+            };
+
+            utterance.onerror = (e) => {
+                console.warn('Erreur TTS:', e);
+                if (isPlaying) stopSpeech();
+            };
+
+            synth.speak(utterance);
+        }
+
+        function startPlayAll() {
+            if (sentenceData.length === 0) return;
+            synth.cancel();
+            isPlaying = true;
+            isPaused = false;
+            currentIndex = 0;
+            repeatCounter = 0;
+
+            document.getElementById('playBtn').style.display = 'none';
+            document.getElementById('pauseBtn').style.display = 'flex';
+            document.getElementById('pauseBtn').innerText = "⏸ Pause";
+
+            speakStep();
+        }
+
+        function togglePause() {
+            if (!isPlaying) return;
+            if (!isPaused) {
+                isPaused = true;
+                synth.pause();
+                document.getElementById('pauseBtn').innerText = "▶ Reprendre";
+            } else {
+                isPaused = false;
+                document.getElementById('pauseBtn').innerText = "⏸ Pause";
+                if (synth.paused) synth.resume();
+                else speakStep();
+            }
+        }
+
+        function stopSpeech() {
+            isPlaying = false;
+            isPaused = false;
+            synth.cancel();
+            document.getElementById('playBtn').style.display = 'flex';
+            document.getElementById('playBtn').disabled = (sentenceData.length === 0);
+            document.getElementById('pauseBtn').style.display = 'none';
+        }
+
+        function toggleLoop() {
+            isLooping = !isLooping;
+            const btn = document.getElementById('loopBtn');
+            if (isLooping) {
+                btn.classList.add('active');
+                btn.innerText = "🔁 Boucle : ON";
+            } else {
+                btn.classList.remove('active');
+                btn.innerText = "🔁 Boucle : OFF";
+            }
+        }
+
+        // ==================== ENREGISTREMENT ====================
+        async function toggleRecording() {
+            if (isRecording) { stopRecording(); return; }
+            await startRecording();
+        }
+
+        async function startRecording() {
+            if (sentenceData.length === 0) {
+                setStatus('Chargez d\'abord une liste', 'error');
+                return;
+            }
+            if (!cameraReady) {
+                await initCamera();
+                await new Promise(r => setTimeout(r, 800));
+            }
+
+            recordedChunks = [];
+            const canvasStream = canvas.captureStream(30);
+
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                ttsDestination = audioCtx.createMediaStreamDestination();
+                ttsStream = ttsDestination.stream;
+            } catch (e) {
+                console.warn('AudioContext non disponible', e);
+                audioCtx = null;
+            }
+
+            const tracks = [...canvasStream.getVideoTracks()];
+            if (ttsStream) tracks.push(...ttsStream.getAudioTracks());
+            const combinedStream = new MediaStream(tracks);
+
+            let mimeType = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = 'video/mp4';
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = 'video/webm;codecs=vp9,opus';
+                    if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+                }
+            }
+
+            try {
+                mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
+            } catch (e) {
+                setStatus('Enregistrement non supporté par ce navigateur', 'error');
+                return;
+            }
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) recordedChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: mimeType.split(';')[0] });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `apprentissage-bilingue-${Date.now()}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 10000);
+                setStatus('✅ Vidéo enregistrée et téléchargée !', 'success');
+
+                isRecording = false;
+                const btn = document.getElementById('recordBtn');
+                btn.classList.remove('recording');
+                btn.innerText = '⏺ Enregistrer';
+
+                if (audioCtx) {
+                    audioCtx.close().catch(() => {});
+                    audioCtx = null;
+                    ttsDestination = null;
+                    ttsStream = null;
+                }
+            };
+
+            mediaRecorder.start(100);
+            isRecording = true;
+
+            const btn = document.getElementById('recordBtn');
+            btn.classList.add('recording');
+            btn.innerText = '⏹ Arrêter l\'enregistrement';
+            setStatus('⏺ Enregistrement en cours...', 'success');
+
+            if (!isPlaying) startPlayAll();
+
+            recordTimer = setTimeout(() => {
+                if (isRecording) stopRecording();
+            }, RECORD_DURATION_MS);
+        }
+
+        function stopRecording() {
+            if (!isRecording) return;
+            if (recordTimer) { clearTimeout(recordTimer); recordTimer = null; }
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+        }
+
+        // ==================== INIT ====================
+        window.addEventListener('load', () => {
+            // Toujours démarrer le rendu (affiche le placeholder caméra)
+            startCanvasRendering();
+            initCamera();
+
+            if (speechSynthesis.onvoiceschanged !== undefined) {
+                speechSynthesis.onvoiceschanged = () => synth.getVoices();
+            }
         });
-      }
-    };
 
-    /* ============================================================
-       STEP 4 — Toolbar controls
-       ============================================================ */
-    function each(fn) {
-      if (!apiReady) return;
-      players.forEach((p, i) => { if (p && p.playVideo) fn(p, i); });
-    }
-
-    document.getElementById("playAll").onclick = () => {
-      each((p, i) => {
-        if (i === 0) p.unMute();  // main player gets sound
-        p.playVideo();
-      });
-    };
-
-    document.getElementById("pauseAll").onclick = () => {
-      each(p => p.pauseVideo());
-    };
-
-    // Realign every player to the main player's current timestamp.
-    // Useful when live streams drift by a second or two.
-    document.getElementById("syncAll").onclick = () => {
-      if (!apiReady || !players[0] || !players[0].getCurrentTime) return;
-      const t = players[0].getCurrentTime();
-      players.forEach((p, i) => {
-        if (i === 0) return;
-        if (p && p.seekTo) p.seekTo(t, true);
-      });
-    };
-  </script>
-
+        window.addEventListener('beforeunload', () => {
+            if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        });
+    </script>
 </body>
 </html>
