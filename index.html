@@ -71,6 +71,8 @@
         #pauseBtn { background: #f0ad4e; color: white; display: none; }
         #stopBtn { background: #333; color: white; }
         #loopBtn { background: #f0f0f0; color: #555; border: 2px solid transparent; }
+        #torchBtn { background: #f0f0f0; color: #555; border: 2px solid transparent; }
+        #torchBtn.active { background: #f1c40f; color: #333; border-color: #d4ac0d; }
         #recordBtn { background: #6c5ce7; color: white; }
         #recordBtn.recording { background: #e17055; animation: pulse 1.2s infinite; }
 
@@ -158,8 +160,8 @@
 <body>
 
     <div id="helpBanner" class="help-banner">
-        ⚠️ <strong>La caméra ne fonctionne pas ?</strong> Ouvrez cette page via un serveur local, pas en double-cliquant sur le fichier.
-        Exemple : dans le dossier du fichier, tapez <code>python -m http.server 8000</code> puis ouvrez <code>http://localhost:8000</code>
+        ⚠️ <strong>La caméra ne fonctionne pas ?</strong> Ouvrez cette page via un serveur local.
+        Exemple : <code>python -m http.server 8000</code> puis <code>http://localhost:8000</code>
     </div>
 
     <div class="input-section">
@@ -170,6 +172,7 @@
             <button id="pauseBtn" onclick="togglePause()">⏸ Pause</button>
             <button id="stopBtn" onclick="stopSpeech()">⏹ Arrêter</button>
             <button id="loopBtn" onclick="toggleLoop()">🔁 Boucle : OFF</button>
+            <button id="torchBtn" onclick="toggleTorch()" disabled>🔦 Flash : OFF</button>
             <button id="recordBtn" onclick="toggleRecording()" disabled>⏺ Enregistrer</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
@@ -201,12 +204,21 @@
         let mediaRecorder = null;
         let recordedChunks = [];
         let isRecording = false;
-        const RECORD_DURATION_MS = 120000;
+        const RECORD_DURATION_MS = 300000; // 5 min max
         let recordTimer = null;
 
         let audioCtx = null;
         let ttsDestination = null;
         let ttsStream = null;
+
+        // Chrono pour le compte à rebours par phrase
+        let sentenceStartTime = 0;
+        let sentenceDurationMs = 5000; // sera calculé
+        let countdownInterval = null;
+
+        // Torche
+        let torchEnabled = false;
+        let torchTrack = null;
 
         function setStatus(msg, type = '') {
             const el = document.getElementById('statusMsg');
@@ -219,7 +231,6 @@
         async function initCamera() {
             const banner = document.getElementById('helpBanner');
 
-            // 1. Contexte sécurisé ?
             if (!window.isSecureContext) {
                 setStatus('❌ Caméra bloquée : ouvrez via http://localhost (pas file://)', 'error');
                 banner.classList.add('visible');
@@ -227,7 +238,6 @@
                 return;
             }
 
-            // 2. API disponible ?
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 setStatus('❌ getUserMedia non disponible dans ce navigateur', 'error');
                 banner.classList.add('visible');
@@ -235,13 +245,16 @@
                 return;
             }
 
-            // 3. Essayer d'accéder
             try {
                 setStatus('Demande d\'accès à la caméra...', 'info');
 
                 try {
                     cameraStream = await navigator.mediaDevices.getUserMedia({
-                        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+                        video: { 
+                            facingMode: 'user',
+                            width: { ideal: 1280 }, 
+                            height: { ideal: 720 } 
+                        },
                         audio: false
                     });
                 } catch (constraintErr) {
@@ -258,6 +271,10 @@
                 cameraReady = true;
                 banner.classList.remove('visible');
                 setStatus('✅ Caméra active', 'success');
+
+                // Activer le bouton torche si supporté
+                setupTorch();
+
                 startCanvasRendering();
 
             } catch (err) {
@@ -265,25 +282,22 @@
                 switch (err.name) {
                     case 'NotAllowedError':
                     case 'PermissionDeniedError':
-                        msg += 'Permission refusée. Cliquez sur l\'icône 📷/🔒 dans la barre d\'adresse, autorisez la caméra, puis rechargez.';
+                        msg += 'Permission refusée. Autorisez la caméra dans la barre d\'adresse.';
                         break;
                     case 'NotFoundError':
                     case 'DevicesNotFoundError':
-                        msg += 'Aucune caméra détectée sur cet appareil.';
+                        msg += 'Aucune caméra détectée.';
                         break;
                     case 'NotReadableError':
                     case 'TrackStartError':
-                        msg += 'Caméra déjà utilisée par une autre application (Zoom, Teams, OBS, autre onglet...).';
+                        msg += 'Caméra déjà utilisée par une autre application.';
                         break;
                     case 'OverconstrainedError':
-                        msg += 'La caméra ne supporte pas la résolution demandée.';
+                        msg += 'Résolution non supportée.';
                         break;
                     case 'SecurityError':
                         msg += 'Contexte non sécurisé (HTTPS ou localhost requis).';
                         banner.classList.add('visible');
-                        break;
-                    case 'AbortError':
-                        msg += 'Accès interrompu par le système.';
                         break;
                     default:
                         msg += err.name + ' – ' + err.message;
@@ -291,6 +305,49 @@
                 console.error('getUserMedia error:', err);
                 setStatus(msg, 'error');
                 drawStaticScreen('Caméra indisponible');
+            }
+        }
+
+        // ==================== TORCHE (FLASHLIGHT) ====================
+        function setupTorch() {
+            const btn = document.getElementById('torchBtn');
+            if (!cameraStream) return;
+
+            const track = cameraStream.getVideoTracks()[0];
+            if (!track) return;
+
+            torchTrack = track;
+            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+
+            if (capabilities.torch) {
+                btn.disabled = false;
+                console.log('Torche supportée');
+            } else {
+                btn.disabled = true;
+                btn.title = 'Torche non supportée sur cet appareil';
+                console.log('Torche NON supportée');
+            }
+        }
+
+        async function toggleTorch() {
+            if (!torchTrack) return;
+            try {
+                torchEnabled = !torchEnabled;
+                await torchTrack.applyConstraints({
+                    advanced: [{ torch: torchEnabled }]
+                });
+                const btn = document.getElementById('torchBtn');
+                if (torchEnabled) {
+                    btn.classList.add('active');
+                    btn.innerText = '🔦 Flash : ON';
+                } else {
+                    btn.classList.remove('active');
+                    btn.innerText = '🔦 Flash : OFF';
+                }
+            } catch (err) {
+                console.error('Torche erreur:', err);
+                setStatus('Torche non disponible sur cet appareil', 'error');
+                torchEnabled = false;
             }
         }
 
@@ -305,9 +362,6 @@
             ctx.font = '18px "Segoe UI", sans-serif';
             ctx.fillStyle = '#bbb';
             ctx.fillText('Ouvrez cette page via http://localhost pour autoriser la caméra', canvas.width / 2, canvas.height / 2 + 30);
-            ctx.font = '16px "Segoe UI", sans-serif';
-            ctx.fillStyle = '#ccc';
-            ctx.fillText('(python -m http.server 8000 → http://localhost:8000)', canvas.width / 2, canvas.height / 2 + 70);
         }
 
         function drawRoundRect(ctx, x, y, w, h, r) {
@@ -335,7 +389,6 @@
                 const W = canvas.width;
                 const H = canvas.height;
 
-                // Fond blanc
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, W, H);
 
@@ -393,11 +446,51 @@
                         if (isPlaying && item.maxRepeats > 1) {
                             ctx.font = '20px "Segoe UI", sans-serif';
                             ctx.fillStyle = '#aaa';
-                            ctx.fillText(`Répétition ${repeatCounter + 1} / ${item.maxRepeats}`, W / 2, H - 90);
+                            ctx.textAlign = 'center';
+                            ctx.fillText(`Répétition ${repeatCounter + 1} / ${item.maxRepeats}`, W / 2, H - 130);
+                        }
+
+                        // ===== COMPTE À REBOURS (5-4-3-2-1-0) =====
+                        if (isPlaying && !isPaused) {
+                            const elapsed = Date.now() - sentenceStartTime;
+                            const remaining = Math.max(0, Math.ceil((sentenceDurationMs - elapsed) / 1000));
+                            const displayNum = Math.min(5, remaining);
+
+                            // Grand cercle de compte à rebours
+                            const cx = W - 110;
+                            const cy = 100;
+                            const radius = 50;
+                            const progress = Math.min(1, elapsed / sentenceDurationMs);
+
+                            // Fond du cercle
+                            ctx.beginPath();
+                            ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+                            ctx.fillStyle = item.isEnglish ? '#fce4e3' : '#e0ecf8';
+                            ctx.fill();
+
+                            // Arc de progression
+                            ctx.beginPath();
+                            ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + (2 * Math.PI * progress));
+                            ctx.strokeStyle = item.isEnglish ? '#d9534f' : '#0275d8';
+                            ctx.lineWidth = 8;
+                            ctx.lineCap = 'round';
+                            ctx.stroke();
+
+                            // Chiffre au centre (5→0)
+                            ctx.fillStyle = item.isEnglish ? '#d9534f' : '#0275d8';
+                            ctx.font = 'bold 42px "Segoe UI", sans-serif';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(String(displayNum), cx, cy + 2);
+
+                            // Label "sec"
+                            ctx.font = 'bold 12px "Segoe UI", sans-serif';
+                            ctx.fillStyle = '#aaa';
+                            ctx.fillText('SEC', cx, cy + 32);
                         }
                     }
 
-                    // Barre de progression
+                    // Barre de progression globale
                     if (isPlaying) {
                         const progress = (currentIndex + (repeatCounter / (sentenceData[currentIndex]?.maxRepeats || 1))) / sentenceData.length;
                         const barWidth = W * 0.6;
@@ -420,14 +513,13 @@
                     ctx.fillText('Chargez une liste pour commencer', W / 2, H / 2);
                 }
 
-                // Écran caméra (picture-in-picture)
+                // ===== ÉCRAN CAMÉRA (sans badge LIVE) =====
                 if (cameraReady && videoElement.readyState >= 2) {
                     const camW = 320;
                     const camH = 180;
                     const camX = W - camW - 24;
                     const camY = H - camH - 24;
 
-                    // Ombre
                     ctx.save();
                     ctx.shadowColor = 'rgba(0,0,0,0.35)';
                     ctx.shadowBlur = 20;
@@ -437,7 +529,6 @@
                     ctx.fill();
                     ctx.restore();
 
-                    // Clip + vidéo miroir
                     ctx.save();
                     drawRoundRect(ctx, camX, camY, camW, camH, 16);
                     ctx.clip();
@@ -446,31 +537,27 @@
                     ctx.drawImage(videoElement, 0, 0, camW, camH);
                     ctx.restore();
 
-                    // Bordure blanche
                     ctx.save();
                     drawRoundRect(ctx, camX, camY, camW, camH, 16);
-                    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+                    ctx.strokeStyle = torchEnabled ? '#f1c40f' : 'rgba(255,255,255,0.9)';
                     ctx.lineWidth = 3;
                     ctx.stroke();
                     ctx.restore();
 
-                    // Badge LIVE
-                    ctx.save();
-                    drawRoundRect(ctx, camX + 10, camY + 10, 60, 24, 12);
-                    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-                    ctx.fill();
-                    ctx.fillStyle = '#ff4757';
-                    ctx.beginPath();
-                    ctx.arc(camX + 24, camY + 22, 5, 0, 2 * Math.PI);
-                    ctx.fill();
-                    ctx.fillStyle = '#fff';
-                    ctx.font = 'bold 11px "Segoe UI", sans-serif';
-                    ctx.textAlign = 'left';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText('LIVE', camX + 36, camY + 23);
-                    ctx.restore();
+                    // Petit indicateur flash si activé
+                    if (torchEnabled) {
+                        ctx.save();
+                        drawRoundRect(ctx, camX + 10, camY + 10, 68, 24, 12);
+                        ctx.fillStyle = 'rgba(241,196,15,0.9)';
+                        ctx.fill();
+                        ctx.fillStyle = '#333';
+                        ctx.font = 'bold 11px "Segoe UI", sans-serif';
+                        ctx.textAlign = 'left';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText('🔦 ON', camX + 20, camY + 22);
+                        ctx.restore();
+                    }
                 } else if (!cameraReady) {
-                    // Placeholder caméra
                     const camW = 320;
                     const camH = 180;
                     const camX = W - camW - 24;
@@ -526,6 +613,17 @@
             }
         }
 
+        // Estime la durée d'une phrase (~140 mots/min en TTS)
+        function estimateDuration(text, isEnglish) {
+            const words = text.split(/\s+/).length;
+            // ~140 mots/min en anglais, ~160 en français (TTS)
+            const wpm = isEnglish ? 140 : 160;
+            const minutes = words / wpm;
+            const sec = Math.max(2, minutes * 60); // min 2 sec
+            // Ajouter une petite marge pour la naturalité
+            return Math.round(sec * 1000 + 500);
+        }
+
         function speakStep() {
             if (!isPlaying || isPaused) return;
 
@@ -547,6 +645,13 @@
             const voices = synth.getVoices();
             const voice = voices.find(v => v.lang.startsWith(currentItem.lang));
             if (voice) utterance.voice = voice;
+
+            // Calculer la durée estimée pour le compte à rebours
+            sentenceDurationMs = estimateDuration(currentItem.text, currentItem.isEnglish);
+            sentenceStartTime = Date.now();
+
+            // Forcer un redraw immédiat pour voir le compte à rebours
+            if (!animationFrameId) startCanvasRendering();
 
             utterance.onend = () => {
                 if (!isPlaying || isPaused) return;
@@ -592,6 +697,7 @@
             } else {
                 isPaused = false;
                 document.getElementById('pauseBtn').innerText = "⏸ Pause";
+                // Ajuster le startTime pour reprendre le compte à rebours au bon endroit
                 if (synth.paused) synth.resume();
                 else speakStep();
             }
@@ -618,10 +724,31 @@
             }
         }
 
-        // ==================== ENREGISTREMENT ====================
+        // ==================== ENREGISTREMENT (MP4 qui marche) ====================
         async function toggleRecording() {
             if (isRecording) { stopRecording(); return; }
             await startRecording();
+        }
+
+        function pickBestMimeType() {
+            // Ordre de préférence — du plus compatible au moins compatible
+            const candidates = [
+                'video/mp4;codecs=avc1.42E01E,mp4a.40.2',  // H.264 + AAC (idéal)
+                'video/mp4;codecs=avc1.42E01E',            // H.264 sans audio
+                'video/mp4;codecs=h264,aac',
+                'video/mp4',
+                'video/webm;codecs=h264,opus',
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus',
+                'video/webm'
+            ];
+            for (const c of candidates) {
+                if (MediaRecorder.isTypeSupported(c)) {
+                    console.log('MIME retenu:', c);
+                    return c;
+                }
+            }
+            return 'video/webm';
         }
 
         async function startRecording() {
@@ -650,37 +777,52 @@
             if (ttsStream) tracks.push(...ttsStream.getAudioTracks());
             const combinedStream = new MediaStream(tracks);
 
-            let mimeType = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
-            if (!MediaRecorder.isTypeSupported(mimeType)) {
-                mimeType = 'video/mp4';
-                if (!MediaRecorder.isTypeSupported(mimeType)) {
-                    mimeType = 'video/webm;codecs=vp9,opus';
-                    if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
-                }
-            }
+            const mimeType = pickBestMimeType();
 
             try {
-                mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
+                mediaRecorder = new MediaRecorder(combinedStream, { 
+                    mimeType,
+                    videoBitsPerSecond: 4000000 // 4 Mbps pour une bonne qualité
+                });
             } catch (e) {
-                setStatus('Enregistrement non supporté par ce navigateur', 'error');
+                console.error('Erreur MediaRecorder:', e);
+                setStatus('Enregistrement non supporté : ' + e.message, 'error');
                 return;
             }
 
             mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) recordedChunks.push(event.data);
+                if (event.data && event.data.size > 0) recordedChunks.push(event.data);
             };
 
             mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: mimeType.split(';')[0] });
+                if (recordedChunks.length === 0) {
+                    setStatus('Aucune donnée enregistrée', 'error');
+                    isRecording = false;
+                    return;
+                }
+
+                const actualMime = mediaRecorder.mimeType || mimeType;
+                const ext = actualMime.includes('mp4') ? 'mp4' : 'webm';
+                const blob = new Blob(recordedChunks, { type: actualMime.split(';')[0] });
+                
+                console.log('Enregistrement terminé:', blob.size, 'octets,', ext);
+                
+                if (blob.size < 1000) {
+                    setStatus('Enregistrement trop court ou vide', 'error');
+                    isRecording = false;
+                    return;
+                }
+
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `apprentissage-bilingue-${Date.now()}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
+                a.download = `apprentissage-bilingue-${Date.now()}.${ext}`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 setTimeout(() => URL.revokeObjectURL(url), 10000);
-                setStatus('✅ Vidéo enregistrée et téléchargée !', 'success');
+                
+                setStatus(`✅ Vidéo téléchargée (${ext.toUpperCase()}, ${(blob.size/1024/1024).toFixed(1)} Mo)`, 'success');
 
                 isRecording = false;
                 const btn = document.getElementById('recordBtn');
@@ -695,13 +837,18 @@
                 }
             };
 
-            mediaRecorder.start(100);
+            mediaRecorder.onerror = (e) => {
+                console.error('MediaRecorder error:', e);
+                setStatus('Erreur d\'enregistrement : ' + e.error, 'error');
+            };
+
+            mediaRecorder.start(1000); // chunk toutes les secondes
             isRecording = true;
 
             const btn = document.getElementById('recordBtn');
             btn.classList.add('recording');
-            btn.innerText = '⏹ Arrêter l\'enregistrement';
-            setStatus('⏺ Enregistrement en cours...', 'success');
+            btn.innerText = '⏹ Arrêter';
+            setStatus(`⏺ Enregistrement en cours (${mimeType.split(';')[0]})...`, 'success');
 
             if (!isPlaying) startPlayAll();
 
@@ -713,12 +860,14 @@
         function stopRecording() {
             if (!isRecording) return;
             if (recordTimer) { clearTimeout(recordTimer); recordTimer = null; }
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.requestData();
+                setTimeout(() => mediaRecorder.stop(), 200);
+            }
         }
 
         // ==================== INIT ====================
         window.addEventListener('load', () => {
-            // Toujours démarrer le rendu (affiche le placeholder caméra)
             startCanvasRendering();
             initCamera();
 
