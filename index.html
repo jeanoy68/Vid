@@ -134,6 +134,7 @@
         .status-msg.success { color: var(--success-green); font-weight: bold; }
         .status-msg.error { color: var(--en-red); font-weight: bold; }
         .status-msg.info { color: #0275d8; }
+        .status-msg.warn { color: #e67e22; font-weight: bold; }
 
         .help-banner {
             width: 100%;
@@ -154,6 +155,31 @@
             padding: 2px 6px;
             border-radius: 4px;
             font-family: monospace;
+        }
+
+        /* Indicateur audio live */
+        .audio-meter {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(0,0,0,0.5);
+            padding: 6px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            color: white;
+            font-weight: bold;
+            display: none;
+        }
+        .audio-meter.visible { display: flex; }
+        .audio-meter .bar {
+            width: 4px;
+            height: 12px;
+            background: #4cd137;
+            border-radius: 2px;
+            transition: height 0.1s;
         }
     </style>
 </head>
@@ -181,6 +207,13 @@
     <div class="video-stage">
         <canvas id="canvasPreview" width="1280" height="720"></canvas>
         <video id="cameraVideo" autoplay playsinline muted></video>
+        <div id="audioMeter" class="audio-meter">
+            <span>🎤</span>
+            <div class="bar" id="bar1"></div>
+            <div class="bar" id="bar2"></div>
+            <div class="bar" id="bar3"></div>
+            <div class="bar" id="bar4"></div>
+        </div>
     </div>
 
     <script>
@@ -204,19 +237,20 @@
         let mediaRecorder = null;
         let recordedChunks = [];
         let isRecording = false;
-        const RECORD_DURATION_MS = 300000; // 5 min max
+        const RECORD_DURATION_MS = 300000;
         let recordTimer = null;
 
+        // Audio recording
         let audioCtx = null;
-        let ttsDestination = null;
-        let ttsStream = null;
+        let micStream = null;
+        let micAnalyser = null;
+        let micSource = null;
+        let recordDestination = null;
+        let audioMeterRaf = null;
 
-        // Chrono pour le compte à rebours par phrase
         let sentenceStartTime = 0;
-        let sentenceDurationMs = 5000; // sera calculé
-        let countdownInterval = null;
+        let sentenceDurationMs = 5000;
 
-        // Torche
         let torchEnabled = false;
         let torchTrack = null;
 
@@ -239,7 +273,7 @@
             }
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                setStatus('❌ getUserMedia non disponible dans ce navigateur', 'error');
+                setStatus('❌ getUserMedia non disponible', 'error');
                 banner.classList.add('visible');
                 drawStaticScreen('API caméra indisponible');
                 return;
@@ -259,7 +293,6 @@
                     });
                 } catch (constraintErr) {
                     if (constraintErr.name === 'OverconstrainedError') {
-                        console.warn('Contraintes non supportées, réessai sans contraintes');
                         cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                     } else {
                         throw constraintErr;
@@ -272,9 +305,7 @@
                 banner.classList.remove('visible');
                 setStatus('✅ Caméra active', 'success');
 
-                // Activer le bouton torche si supporté
                 setupTorch();
-
                 startCanvasRendering();
 
             } catch (err) {
@@ -285,15 +316,10 @@
                         msg += 'Permission refusée. Autorisez la caméra dans la barre d\'adresse.';
                         break;
                     case 'NotFoundError':
-                    case 'DevicesNotFoundError':
                         msg += 'Aucune caméra détectée.';
                         break;
                     case 'NotReadableError':
-                    case 'TrackStartError':
                         msg += 'Caméra déjà utilisée par une autre application.';
-                        break;
-                    case 'OverconstrainedError':
-                        msg += 'Résolution non supportée.';
                         break;
                     case 'SecurityError':
                         msg += 'Contexte non sécurisé (HTTPS ou localhost requis).';
@@ -302,30 +328,23 @@
                     default:
                         msg += err.name + ' – ' + err.message;
                 }
-                console.error('getUserMedia error:', err);
                 setStatus(msg, 'error');
                 drawStaticScreen('Caméra indisponible');
             }
         }
 
-        // ==================== TORCHE (FLASHLIGHT) ====================
         function setupTorch() {
             const btn = document.getElementById('torchBtn');
             if (!cameraStream) return;
-
             const track = cameraStream.getVideoTracks()[0];
             if (!track) return;
-
             torchTrack = track;
             const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-
             if (capabilities.torch) {
                 btn.disabled = false;
-                console.log('Torche supportée');
             } else {
                 btn.disabled = true;
                 btn.title = 'Torche non supportée sur cet appareil';
-                console.log('Torche NON supportée');
             }
         }
 
@@ -345,7 +364,6 @@
                     btn.innerText = '🔦 Flash : OFF';
                 }
             } catch (err) {
-                console.error('Torche erreur:', err);
                 setStatus('Torche non disponible sur cet appareil', 'error');
                 torchEnabled = false;
             }
@@ -361,7 +379,7 @@
             ctx.fillText(text, canvas.width / 2, canvas.height / 2 - 20);
             ctx.font = '18px "Segoe UI", sans-serif';
             ctx.fillStyle = '#bbb';
-            ctx.fillText('Ouvrez cette page via http://localhost pour autoriser la caméra', canvas.width / 2, canvas.height / 2 + 30);
+            ctx.fillText('Ouvrez via http://localhost pour autoriser la caméra', canvas.width / 2, canvas.height / 2 + 30);
         }
 
         function drawRoundRect(ctx, x, y, w, h, r) {
@@ -392,7 +410,6 @@
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, W, H);
 
-                // Phrase active au centre
                 if (sentenceData.length > 0) {
                     const activeIndex = isPlaying ? currentIndex : 0;
                     const item = sentenceData[activeIndex];
@@ -430,7 +447,6 @@
                             ctx.fillText(line, W / 2, startY + (i * lineHeight));
                         });
 
-                        // Badge EN/FR
                         const badgeText = item.isEnglish ? 'EN' : 'FR';
                         const badgeColor = item.isEnglish ? '#d9534f' : '#0275d8';
                         ctx.font = 'bold 16px "Segoe UI", sans-serif';
@@ -442,7 +458,6 @@
                         ctx.textAlign = 'center';
                         ctx.fillText(badgeText, 30 + badgeWidth / 2, 49);
 
-                        // Compteur de répétition
                         if (isPlaying && item.maxRepeats > 1) {
                             ctx.font = '20px "Segoe UI", sans-serif';
                             ctx.fillStyle = '#aaa';
@@ -450,25 +465,21 @@
                             ctx.fillText(`Répétition ${repeatCounter + 1} / ${item.maxRepeats}`, W / 2, H - 130);
                         }
 
-                        // ===== COMPTE À REBOURS (5-4-3-2-1-0) =====
                         if (isPlaying && !isPaused) {
                             const elapsed = Date.now() - sentenceStartTime;
                             const remaining = Math.max(0, Math.ceil((sentenceDurationMs - elapsed) / 1000));
                             const displayNum = Math.min(5, remaining);
 
-                            // Grand cercle de compte à rebours
                             const cx = W - 110;
                             const cy = 100;
                             const radius = 50;
                             const progress = Math.min(1, elapsed / sentenceDurationMs);
 
-                            // Fond du cercle
                             ctx.beginPath();
                             ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
                             ctx.fillStyle = item.isEnglish ? '#fce4e3' : '#e0ecf8';
                             ctx.fill();
 
-                            // Arc de progression
                             ctx.beginPath();
                             ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + (2 * Math.PI * progress));
                             ctx.strokeStyle = item.isEnglish ? '#d9534f' : '#0275d8';
@@ -476,21 +487,18 @@
                             ctx.lineCap = 'round';
                             ctx.stroke();
 
-                            // Chiffre au centre (5→0)
                             ctx.fillStyle = item.isEnglish ? '#d9534f' : '#0275d8';
                             ctx.font = 'bold 42px "Segoe UI", sans-serif';
                             ctx.textAlign = 'center';
                             ctx.textBaseline = 'middle';
                             ctx.fillText(String(displayNum), cx, cy + 2);
 
-                            // Label "sec"
                             ctx.font = 'bold 12px "Segoe UI", sans-serif';
                             ctx.fillStyle = '#aaa';
                             ctx.fillText('SEC', cx, cy + 32);
                         }
                     }
 
-                    // Barre de progression globale
                     if (isPlaying) {
                         const progress = (currentIndex + (repeatCounter / (sentenceData[currentIndex]?.maxRepeats || 1))) / sentenceData.length;
                         const barWidth = W * 0.6;
@@ -513,7 +521,6 @@
                     ctx.fillText('Chargez une liste pour commencer', W / 2, H / 2);
                 }
 
-                // ===== ÉCRAN CAMÉRA (sans badge LIVE) =====
                 if (cameraReady && videoElement.readyState >= 2) {
                     const camW = 320;
                     const camH = 180;
@@ -542,38 +549,6 @@
                     ctx.strokeStyle = torchEnabled ? '#f1c40f' : 'rgba(255,255,255,0.9)';
                     ctx.lineWidth = 3;
                     ctx.stroke();
-                    ctx.restore();
-
-                    // Petit indicateur flash si activé
-                    if (torchEnabled) {
-                        ctx.save();
-                        drawRoundRect(ctx, camX + 10, camY + 10, 68, 24, 12);
-                        ctx.fillStyle = 'rgba(241,196,15,0.9)';
-                        ctx.fill();
-                        ctx.fillStyle = '#333';
-                        ctx.font = 'bold 11px "Segoe UI", sans-serif';
-                        ctx.textAlign = 'left';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText('🔦 ON', camX + 20, camY + 22);
-                        ctx.restore();
-                    }
-                } else if (!cameraReady) {
-                    const camW = 320;
-                    const camH = 180;
-                    const camX = W - camW - 24;
-                    const camY = H - camH - 24;
-                    ctx.save();
-                    drawRoundRect(ctx, camX, camY, camW, camH, 16);
-                    ctx.fillStyle = '#1a1a1a';
-                    ctx.fill();
-                    ctx.strokeStyle = '#333';
-                    ctx.lineWidth = 3;
-                    ctx.stroke();
-                    ctx.fillStyle = '#666';
-                    ctx.font = '13px "Segoe UI", sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText('📷 Caméra désactivée', camX + camW / 2, camY + camH / 2);
                     ctx.restore();
                 }
 
@@ -613,14 +588,11 @@
             }
         }
 
-        // Estime la durée d'une phrase (~140 mots/min en TTS)
         function estimateDuration(text, isEnglish) {
             const words = text.split(/\s+/).length;
-            // ~140 mots/min en anglais, ~160 en français (TTS)
             const wpm = isEnglish ? 140 : 160;
             const minutes = words / wpm;
-            const sec = Math.max(2, minutes * 60); // min 2 sec
-            // Ajouter une petite marge pour la naturalité
+            const sec = Math.max(2, minutes * 60);
             return Math.round(sec * 1000 + 500);
         }
 
@@ -646,12 +618,13 @@
             const voice = voices.find(v => v.lang.startsWith(currentItem.lang));
             if (voice) utterance.voice = voice;
 
-            // Calculer la durée estimée pour le compte à rebours
+            // IMPORTANT: volume max pour que le micro capte bien
+            utterance.volume = 1.0;
+            utterance.rate = 0.95;
+            utterance.pitch = 1.0;
+
             sentenceDurationMs = estimateDuration(currentItem.text, currentItem.isEnglish);
             sentenceStartTime = Date.now();
-
-            // Forcer un redraw immédiat pour voir le compte à rebours
-            if (!animationFrameId) startCanvasRendering();
 
             utterance.onend = () => {
                 if (!isPlaying || isPaused) return;
@@ -697,7 +670,6 @@
             } else {
                 isPaused = false;
                 document.getElementById('pauseBtn').innerText = "⏸ Pause";
-                // Ajuster le startTime pour reprendre le compte à rebours au bon endroit
                 if (synth.paused) synth.resume();
                 else speakStep();
             }
@@ -724,17 +696,116 @@
             }
         }
 
-        // ==================== ENREGISTREMENT (MP4 qui marche) ====================
+        // ==================== CAPTURE MIC (pour l'audio dans la vidéo) ====================
+        async function startMicCapture() {
+            try {
+                // Demander explicitement l'accès au micro
+                const micConstraints = {
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false,
+                        sampleRate: 48000
+                    }
+                };
+                micStream = await navigator.mediaDevices.getUserMedia(micConstraints);
+                console.log('Micro capturé:', micStream.getAudioTracks().length, 'piste(s)');
+
+                // Configurer AudioContext pour mixer + analyser
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Reprendre le contexte si suspendu (Chrome autoplay policy)
+                if (audioCtx.state === 'suspended') {
+                    await audioCtx.resume();
+                }
+
+                // Source du micro
+                micSource = audioCtx.createMediaStreamSource(micStream);
+
+                // Analyseur pour le VU-mètre
+                micAnalyser = audioCtx.createAnalyser();
+                micAnalyser.fftSize = 256;
+                micSource.connect(micAnalyser);
+
+                // Destination d'enregistrement (mix final)
+                recordDestination = audioCtx.createMediaStreamDestination();
+                micSource.connect(recordDestination);
+
+                // Afficher le VU-mètre
+                document.getElementById('audioMeter').classList.add('visible');
+                startAudioMeter();
+
+                return recordDestination.stream;
+            } catch (err) {
+                console.error('Micro non accessible:', err);
+                setStatus('⚠️ Micro inaccessible : ' + err.name + '. La vidéo n\'aura pas de son.', 'warn');
+                return null;
+            }
+        }
+
+        function startAudioMeter() {
+            if (!micAnalyser) return;
+            const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+            const bars = [
+                document.getElementById('bar1'),
+                document.getElementById('bar2'),
+                document.getElementById('bar3'),
+                document.getElementById('bar4')
+            ];
+
+            function update() {
+                if (!micAnalyser) return;
+                micAnalyser.getByteFrequencyData(dataArray);
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+                const avg = sum / dataArray.length;
+                const level = Math.min(1, avg / 100);
+
+                bars.forEach((bar, i) => {
+                    const threshold = (i + 1) / 4;
+                    if (level >= threshold * 0.5) {
+                        bar.style.height = (8 + level * 16) + 'px';
+                        bar.style.background = level > 0.5 ? '#f39c12' : '#4cd137';
+                    } else {
+                        bar.style.height = '8px';
+                        bar.style.background = '#555';
+                    }
+                });
+
+                audioMeterRaf = requestAnimationFrame(update);
+            }
+            update();
+        }
+
+        function stopMicCapture() {
+            if (audioMeterRaf) {
+                cancelAnimationFrame(audioMeterRaf);
+                audioMeterRaf = null;
+            }
+            if (micStream) {
+                micStream.getTracks().forEach(t => t.stop());
+                micStream = null;
+            }
+            if (audioCtx) {
+                audioCtx.close().catch(() => {});
+                audioCtx = null;
+            }
+            micAnalyser = null;
+            micSource = null;
+            recordDestination = null;
+            document.getElementById('audioMeter').classList.remove('visible');
+        }
+
+        // ==================== ENREGISTREMENT ====================
         async function toggleRecording() {
             if (isRecording) { stopRecording(); return; }
             await startRecording();
         }
 
         function pickBestMimeType() {
-            // Ordre de préférence — du plus compatible au moins compatible
             const candidates = [
-                'video/mp4;codecs=avc1.42E01E,mp4a.40.2',  // H.264 + AAC (idéal)
-                'video/mp4;codecs=avc1.42E01E',            // H.264 sans audio
+                'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+                'video/mp4;codecs=avc1.42E01E',
                 'video/mp4;codecs=h264,aac',
                 'video/mp4',
                 'video/webm;codecs=h264,opus',
@@ -761,32 +832,36 @@
                 await new Promise(r => setTimeout(r, 800));
             }
 
+            setStatus('🎤 Demande d\'accès au micro...', 'info');
+
+            // Démarrer la capture micro (indispensable pour avoir du son)
+            const micAudioStream = await startMicCapture();
+            if (!micAudioStream) {
+                setStatus('❌ Impossible d\'enregistrer le son : autorisez le micro.', 'error');
+                return;
+            }
+
             recordedChunks = [];
             const canvasStream = canvas.captureStream(30);
 
-            try {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                ttsDestination = audioCtx.createMediaStreamDestination();
-                ttsStream = ttsDestination.stream;
-            } catch (e) {
-                console.warn('AudioContext non disponible', e);
-                audioCtx = null;
-            }
-
-            const tracks = [...canvasStream.getVideoTracks()];
-            if (ttsStream) tracks.push(...ttsStream.getAudioTracks());
-            const combinedStream = new MediaStream(tracks);
+            // Combiner vidéo (canvas) + audio (micro qui capte le TTS)
+            const combinedStream = new MediaStream([
+                ...canvasStream.getVideoTracks(),
+                ...micAudioStream.getAudioTracks()
+            ]);
 
             const mimeType = pickBestMimeType();
 
             try {
                 mediaRecorder = new MediaRecorder(combinedStream, { 
                     mimeType,
-                    videoBitsPerSecond: 4000000 // 4 Mbps pour une bonne qualité
+                    videoBitsPerSecond: 4000000,
+                    audioBitsPerSecond: 128000
                 });
             } catch (e) {
                 console.error('Erreur MediaRecorder:', e);
                 setStatus('Enregistrement non supporté : ' + e.message, 'error');
+                stopMicCapture();
                 return;
             }
 
@@ -795,6 +870,8 @@
             };
 
             mediaRecorder.onstop = () => {
+                stopMicCapture();
+
                 if (recordedChunks.length === 0) {
                     setStatus('Aucune donnée enregistrée', 'error');
                     isRecording = false;
@@ -806,7 +883,7 @@
                 const blob = new Blob(recordedChunks, { type: actualMime.split(';')[0] });
                 
                 console.log('Enregistrement terminé:', blob.size, 'octets,', ext);
-                
+
                 if (blob.size < 1000) {
                     setStatus('Enregistrement trop court ou vide', 'error');
                     isRecording = false;
@@ -822,33 +899,27 @@
                 document.body.removeChild(a);
                 setTimeout(() => URL.revokeObjectURL(url), 10000);
                 
-                setStatus(`✅ Vidéo téléchargée (${ext.toUpperCase()}, ${(blob.size/1024/1024).toFixed(1)} Mo)`, 'success');
+                setStatus(`✅ Vidéo téléchargée (${ext.toUpperCase()}, ${(blob.size/1024/1024).toFixed(1)} Mo) — avec son !`, 'success');
 
                 isRecording = false;
                 const btn = document.getElementById('recordBtn');
                 btn.classList.remove('recording');
                 btn.innerText = '⏺ Enregistrer';
-
-                if (audioCtx) {
-                    audioCtx.close().catch(() => {});
-                    audioCtx = null;
-                    ttsDestination = null;
-                    ttsStream = null;
-                }
             };
 
             mediaRecorder.onerror = (e) => {
                 console.error('MediaRecorder error:', e);
-                setStatus('Erreur d\'enregistrement : ' + e.error, 'error');
+                setStatus('Erreur d\'enregistrement : ' + (e.error?.message || e.error), 'error');
+                stopMicCapture();
             };
 
-            mediaRecorder.start(1000); // chunk toutes les secondes
+            mediaRecorder.start(1000);
             isRecording = true;
 
             const btn = document.getElementById('recordBtn');
             btn.classList.add('recording');
             btn.innerText = '⏹ Arrêter';
-            setStatus(`⏺ Enregistrement en cours (${mimeType.split(';')[0]})...`, 'success');
+            setStatus(`⏺ Enregistrement (son + vidéo)... Parlez et laissez le TTS jouer.`, 'success');
 
             if (!isPlaying) startPlayAll();
 
@@ -878,6 +949,7 @@
 
         window.addEventListener('beforeunload', () => {
             if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+            if (micStream) micStream.getTracks().forEach(t => t.stop());
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
         });
     </script>
