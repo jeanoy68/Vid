@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apprentissage Bilingue TTS + Caméra</title>
+    <title>Apprentissage Bilingue · Caméra + TTS (muet)</title>
     <style>
         :root {
             --en-red: #d9534f;
@@ -157,7 +157,7 @@
             font-family: monospace;
         }
 
-        /* Indicateur audio live */
+        /* Indicateur audio live (désactivé visuellement) */
         .audio-meter {
             position: absolute;
             top: 12px;
@@ -171,15 +171,26 @@
             font-size: 11px;
             color: white;
             font-weight: bold;
-            display: none;
+            display: none; /* caché par défaut, plus utilisé */
         }
-        .audio-meter.visible { display: flex; }
+        .audio-meter.visible { display: none; } /* forcé à off */
         .audio-meter .bar {
             width: 4px;
             height: 12px;
             background: #4cd137;
             border-radius: 2px;
             transition: height 0.1s;
+        }
+
+        /* Note d'information */
+        .mute-note {
+            width: 100%;
+            max-width: 850px;
+            font-size: 13px;
+            color: #888;
+            text-align: center;
+            margin-top: 5px;
+            font-style: italic;
         }
     </style>
 </head>
@@ -202,6 +213,7 @@
             <button id="recordBtn" onclick="toggleRecording()" disabled>⏺ Enregistrer</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
+        <div class="mute-note">🔇 TTS désactivé (muet) · La caméra s'affiche en grand format</div>
     </div>
 
     <div class="video-stage">
@@ -240,7 +252,7 @@
         const RECORD_DURATION_MS = 300000;
         let recordTimer = null;
 
-        // Audio recording
+        // Audio recording (uniquement pour l'enregistrement, mais on garde le micro pour le son dans la vidéo)
         let audioCtx = null;
         let micStream = null;
         let micAnalyser = null;
@@ -254,6 +266,8 @@
         let torchEnabled = false;
         let torchTrack = null;
 
+        // ---- DÉSACTIVATION TTS ----
+        // On force le volume à 0 pour TOUTES les utterances
         function setStatus(msg, type = '') {
             const el = document.getElementById('statusMsg');
             el.textContent = msg;
@@ -261,7 +275,7 @@
             console.log('[STATUS]', msg);
         }
 
-        // ==================== CAMÉRA ====================
+        // ==================== CAMÉRA (taille normale = plein écran dans le canvas) ====================
         async function initCamera() {
             const banner = document.getElementById('helpBanner');
 
@@ -303,7 +317,7 @@
                 await videoElement.play();
                 cameraReady = true;
                 banner.classList.remove('visible');
-                setStatus('✅ Caméra active', 'success');
+                setStatus('✅ Caméra active (affichage plein écran, TTS muet)', 'success');
 
                 setupTorch();
                 startCanvasRendering();
@@ -394,6 +408,7 @@
             ctx.closePath();
         }
 
+        // ---------- RENDU : la caméra occupe TOUT le canvas (taille normale, grand format) ----------
         function startCanvasRendering() {
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
 
@@ -407,149 +422,76 @@
                 const W = canvas.width;
                 const H = canvas.height;
 
+                // 1) Fond blanc
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, W, H);
 
+                // 2) Si la caméra est prête, on l'affiche en plein écran (sans miroir, taille normale)
+                if (cameraReady && videoElement.readyState >= 2) {
+                    // Calcul du "cover" pour remplir tout le canvas sans déformer
+                    const videoW = videoElement.videoWidth || 1280;
+                    const videoH = videoElement.videoHeight || 720;
+                    const scale = Math.max(W / videoW, H / videoH);
+                    const drawW = videoW * scale;
+                    const drawH = videoH * scale;
+                    const offsetX = (W - drawW) / 2;
+                    const offsetY = (H - drawH) / 2;
+
+                    ctx.save();
+                    // PAS de miroir : on veut une image normale (non inversée)
+                    ctx.drawImage(videoElement, offsetX, offsetY, drawW, drawH);
+                    ctx.restore();
+                } else {
+                    // Écran d'attente si caméra pas prête
+                    ctx.font = 'bold 36px "Segoe UI", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#ccc';
+                    ctx.fillText('Initialisation caméra...', W / 2, H / 2);
+                }
+
+                // 3) Si on a des phrases chargées, on affiche un petit bandeau discret (optionnel)
+                //    pour garder la lisibilité du texte, mais on le fait léger pour ne pas cacher la caméra.
                 if (sentenceData.length > 0) {
                     const activeIndex = isPlaying ? currentIndex : 0;
                     const item = sentenceData[activeIndex];
 
                     if (item) {
-                        const textColor = item.isEnglish ? '#d9534f' : '#0275d8';
+                        // Bandeau semi-transparent en bas pour afficher la phrase courante
+                        const barH = 80;
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+                        ctx.fillRect(0, H - barH, W, barH);
 
-                        ctx.font = 'bold 56px "Segoe UI", sans-serif';
+                        const textColor = item.isEnglish ? '#ff8a80' : '#82b1ff';
+                        ctx.font = 'bold 32px "Segoe UI", sans-serif';
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
+                        ctx.fillStyle = textColor;
+                        // Texte tronqué si trop long
+                        let displayText = item.text;
+                        if (displayText.length > 60) displayText = displayText.substring(0, 57) + '...';
+                        ctx.fillText(displayText, W / 2, H - barH / 2);
 
-                        const maxWidth = W - 200;
-                        const words = item.text.split(' ');
-                        const lines = [];
-                        let currentLine = '';
-
-                        words.forEach(word => {
-                            const testLine = currentLine ? currentLine + ' ' + word : word;
-                            const metrics = ctx.measureText(testLine);
-                            if (metrics.width > maxWidth && currentLine) {
-                                lines.push(currentLine);
-                                currentLine = word;
-                            } else {
-                                currentLine = testLine;
-                            }
-                        });
-                        lines.push(currentLine);
-
-                        const lineHeight = 72;
-                        const totalHeight = lines.length * lineHeight;
-                        const startY = (H / 2) - (totalHeight / 2) - 20;
-
-                        lines.forEach((line, i) => {
-                            ctx.fillStyle = textColor;
-                            ctx.fillText(line, W / 2, startY + (i * lineHeight));
-                        });
-
+                        // Badge EN/FR en haut à gauche
                         const badgeText = item.isEnglish ? 'EN' : 'FR';
                         const badgeColor = item.isEnglish ? '#d9534f' : '#0275d8';
-                        ctx.font = 'bold 16px "Segoe UI", sans-serif';
-                        const badgeWidth = ctx.measureText(badgeText).width + 28;
+                        ctx.font = 'bold 20px "Segoe UI", sans-serif';
+                        const badgeWidth = ctx.measureText(badgeText).width + 36;
                         ctx.fillStyle = badgeColor;
-                        drawRoundRect(ctx, 30, 30, badgeWidth, 36, 18);
+                        drawRoundRect(ctx, 30, 30, badgeWidth, 42, 21);
                         ctx.fill();
                         ctx.fillStyle = '#fff';
                         ctx.textAlign = 'center';
-                        ctx.fillText(badgeText, 30 + badgeWidth / 2, 49);
+                        ctx.fillText(badgeText, 30 + badgeWidth / 2, 51);
 
+                        // Indicateur de répétition (discret)
                         if (isPlaying && item.maxRepeats > 1) {
-                            ctx.font = '20px "Segoe UI", sans-serif';
-                            ctx.fillStyle = '#aaa';
-                            ctx.textAlign = 'center';
-                            ctx.fillText(`Répétition ${repeatCounter + 1} / ${item.maxRepeats}`, W / 2, H - 130);
-                        }
-
-                        if (isPlaying && !isPaused) {
-                            const elapsed = Date.now() - sentenceStartTime;
-                            const remaining = Math.max(0, Math.ceil((sentenceDurationMs - elapsed) / 1000));
-                            const displayNum = Math.min(5, remaining);
-
-                            const cx = W - 110;
-                            const cy = 100;
-                            const radius = 50;
-                            const progress = Math.min(1, elapsed / sentenceDurationMs);
-
-                            ctx.beginPath();
-                            ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
-                            ctx.fillStyle = item.isEnglish ? '#fce4e3' : '#e0ecf8';
-                            ctx.fill();
-
-                            ctx.beginPath();
-                            ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + (2 * Math.PI * progress));
-                            ctx.strokeStyle = item.isEnglish ? '#d9534f' : '#0275d8';
-                            ctx.lineWidth = 8;
-                            ctx.lineCap = 'round';
-                            ctx.stroke();
-
-                            ctx.fillStyle = item.isEnglish ? '#d9534f' : '#0275d8';
-                            ctx.font = 'bold 42px "Segoe UI", sans-serif';
-                            ctx.textAlign = 'center';
-                            ctx.textBaseline = 'middle';
-                            ctx.fillText(String(displayNum), cx, cy + 2);
-
-                            ctx.font = 'bold 12px "Segoe UI", sans-serif';
-                            ctx.fillStyle = '#aaa';
-                            ctx.fillText('SEC', cx, cy + 32);
+                            ctx.font = '18px "Segoe UI", sans-serif';
+                            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                            ctx.textAlign = 'right';
+                            ctx.fillText(`${repeatCounter + 1}/${item.maxRepeats}`, W - 40, 55);
                         }
                     }
-
-                    if (isPlaying) {
-                        const progress = (currentIndex + (repeatCounter / (sentenceData[currentIndex]?.maxRepeats || 1))) / sentenceData.length;
-                        const barWidth = W * 0.6;
-                        const barX = (W - barWidth) / 2;
-                        const barY = H - 50;
-
-                        ctx.fillStyle = '#eee';
-                        drawRoundRect(ctx, barX, barY, barWidth, 8, 4);
-                        ctx.fill();
-
-                        ctx.fillStyle = '#6c5ce7';
-                        drawRoundRect(ctx, barX, barY, barWidth * Math.min(progress, 1), 8, 4);
-                        ctx.fill();
-                    }
-                } else {
-                    ctx.font = 'bold 36px "Segoe UI", sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillStyle = '#ccc';
-                    ctx.fillText('Chargez une liste pour commencer', W / 2, H / 2);
-                }
-
-                if (cameraReady && videoElement.readyState >= 2) {
-                    const camW = 320;
-                    const camH = 180;
-                    const camX = W - camW - 24;
-                    const camY = H - camH - 24;
-
-                    ctx.save();
-                    ctx.shadowColor = 'rgba(0,0,0,0.35)';
-                    ctx.shadowBlur = 20;
-                    ctx.shadowOffsetY = 8;
-                    drawRoundRect(ctx, camX, camY, camW, camH, 16);
-                    ctx.fillStyle = '#000';
-                    ctx.fill();
-                    ctx.restore();
-
-                    ctx.save();
-                    drawRoundRect(ctx, camX, camY, camW, camH, 16);
-                    ctx.clip();
-                    ctx.translate(camX + camW, camY);
-                    ctx.scale(-1, 1);
-                    ctx.drawImage(videoElement, 0, 0, camW, camH);
-                    ctx.restore();
-
-                    ctx.save();
-                    drawRoundRect(ctx, camX, camY, camW, camH, 16);
-                    ctx.strokeStyle = torchEnabled ? '#f1c40f' : 'rgba(255,255,255,0.9)';
-                    ctx.lineWidth = 3;
-                    ctx.stroke();
-                    ctx.restore();
                 }
 
                 animationFrameId = requestAnimationFrame(render);
@@ -558,7 +500,7 @@
             animationFrameId = requestAnimationFrame(render);
         }
 
-        // ==================== TEXTE & TTS ====================
+        // ==================== TEXTE & TTS (muet) ====================
         function processText() {
             stopSpeech();
             const input = document.getElementById('textInput').value;
@@ -579,7 +521,7 @@
             if (sentenceData.length > 0) {
                 document.getElementById('playBtn').disabled = false;
                 document.getElementById('recordBtn').disabled = false;
-                setStatus(`✅ Liste chargée : ${sentenceData.length} lignes`, 'success');
+                setStatus(`✅ Liste chargée : ${sentenceData.length} lignes · TTS désactivé (muet)`, 'success');
                 if (!animationFrameId) startCanvasRendering();
             } else {
                 document.getElementById('playBtn').disabled = true;
@@ -618,8 +560,8 @@
             const voice = voices.find(v => v.lang.startsWith(currentItem.lang));
             if (voice) utterance.voice = voice;
 
-            // IMPORTANT: volume max pour que le micro capte bien
-            utterance.volume = 1.0;
+            // *** VOLUME À ZÉRO POUR DÉSACTIVER LE SON ***
+            utterance.volume = 0.0;      // <-- TTS muet
             utterance.rate = 0.95;
             utterance.pitch = 1.0;
 
@@ -696,10 +638,9 @@
             }
         }
 
-        // ==================== CAPTURE MIC (pour l'audio dans la vidéo) ====================
+        // ==================== CAPTURE MIC (uniquement pour l'enregistrement vidéo, pas pour le TTS) ====================
         async function startMicCapture() {
             try {
-                // Demander explicitement l'accès au micro
                 const micConstraints = {
                     audio: {
                         echoCancellation: false,
@@ -711,29 +652,24 @@
                 micStream = await navigator.mediaDevices.getUserMedia(micConstraints);
                 console.log('Micro capturé:', micStream.getAudioTracks().length, 'piste(s)');
 
-                // Configurer AudioContext pour mixer + analyser
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                
-                // Reprendre le contexte si suspendu (Chrome autoplay policy)
                 if (audioCtx.state === 'suspended') {
                     await audioCtx.resume();
                 }
 
-                // Source du micro
                 micSource = audioCtx.createMediaStreamSource(micStream);
 
-                // Analyseur pour le VU-mètre
+                // On garde l'analyseur mais le VU-mètre est caché
                 micAnalyser = audioCtx.createAnalyser();
                 micAnalyser.fftSize = 256;
                 micSource.connect(micAnalyser);
 
-                // Destination d'enregistrement (mix final)
                 recordDestination = audioCtx.createMediaStreamDestination();
                 micSource.connect(recordDestination);
 
-                // Afficher le VU-mètre
-                document.getElementById('audioMeter').classList.add('visible');
-                startAudioMeter();
+                // VU-mètre désactivé visuellement
+                // document.getElementById('audioMeter').classList.add('visible');
+                // startAudioMeter();
 
                 return recordDestination.stream;
             } catch (err) {
@@ -744,37 +680,8 @@
         }
 
         function startAudioMeter() {
-            if (!micAnalyser) return;
-            const dataArray = new Uint8Array(micAnalyser.frequencyBinCount);
-            const bars = [
-                document.getElementById('bar1'),
-                document.getElementById('bar2'),
-                document.getElementById('bar3'),
-                document.getElementById('bar4')
-            ];
-
-            function update() {
-                if (!micAnalyser) return;
-                micAnalyser.getByteFrequencyData(dataArray);
-                let sum = 0;
-                for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-                const avg = sum / dataArray.length;
-                const level = Math.min(1, avg / 100);
-
-                bars.forEach((bar, i) => {
-                    const threshold = (i + 1) / 4;
-                    if (level >= threshold * 0.5) {
-                        bar.style.height = (8 + level * 16) + 'px';
-                        bar.style.background = level > 0.5 ? '#f39c12' : '#4cd137';
-                    } else {
-                        bar.style.height = '8px';
-                        bar.style.background = '#555';
-                    }
-                });
-
-                audioMeterRaf = requestAnimationFrame(update);
-            }
-            update();
+            // Désactivé - on ne l'utilise plus
+            return;
         }
 
         function stopMicCapture() {
@@ -834,7 +741,6 @@
 
             setStatus('🎤 Demande d\'accès au micro...', 'info');
 
-            // Démarrer la capture micro (indispensable pour avoir du son)
             const micAudioStream = await startMicCapture();
             if (!micAudioStream) {
                 setStatus('❌ Impossible d\'enregistrer le son : autorisez le micro.', 'error');
@@ -844,7 +750,6 @@
             recordedChunks = [];
             const canvasStream = canvas.captureStream(30);
 
-            // Combiner vidéo (canvas) + audio (micro qui capte le TTS)
             const combinedStream = new MediaStream([
                 ...canvasStream.getVideoTracks(),
                 ...micAudioStream.getAudioTracks()
@@ -899,7 +804,7 @@
                 document.body.removeChild(a);
                 setTimeout(() => URL.revokeObjectURL(url), 10000);
                 
-                setStatus(`✅ Vidéo téléchargée (${ext.toUpperCase()}, ${(blob.size/1024/1024).toFixed(1)} Mo) — avec son !`, 'success');
+                setStatus(`✅ Vidéo téléchargée (${ext.toUpperCase()}, ${(blob.size/1024/1024).toFixed(1)} Mo)`, 'success');
 
                 isRecording = false;
                 const btn = document.getElementById('recordBtn');
@@ -919,7 +824,7 @@
             const btn = document.getElementById('recordBtn');
             btn.classList.add('recording');
             btn.innerText = '⏹ Arrêter';
-            setStatus(`⏺ Enregistrement (son + vidéo)... Parlez et laissez le TTS jouer.`, 'success');
+            setStatus(`⏺ Enregistrement (caméra plein écran, TTS muet)...`, 'success');
 
             if (!isPlaying) startPlayAll();
 
