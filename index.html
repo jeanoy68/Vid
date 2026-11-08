@@ -10,8 +10,7 @@
             --fr-blue: #0275d8;
             --border-color: #eeeeee;
             --success-green: #28a745;
-            --board-bg: #1e1e2e;
-            --board-text: #f5f5f5;
+            --accent: #6c5ce7;
         }
 
         * { box-sizing: border-box; }
@@ -29,8 +28,8 @@
 
         .input-section {
             width: 100%;
-            max-width: 850px;
-            margin-bottom: 30px;
+            max-width: 900px;
+            margin-bottom: 20px;
         }
 
         textarea {
@@ -93,16 +92,74 @@
         button:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.9; }
         button:disabled { opacity: 0.2; cursor: not-allowed; }
 
+        /* ===== Barre d'options (filtre, couleur, cadre, taille) ===== */
+        .options-bar {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+            padding: 12px 16px;
+            background: #f8f9ff;
+            border: 1px solid #e6e9ff;
+            border-radius: 12px;
+            font-size: 13px;
+        }
+
+        .options-bar label {
+            font-weight: 600;
+            color: #555;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .options-bar select, .options-bar input[type="range"] {
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 6px 10px;
+            background: white;
+            font-family: inherit;
+            font-size: 13px;
+            color: #333;
+            cursor: pointer;
+        }
+
+        .options-bar input[type="range"] {
+            padding: 0;
+            width: 110px;
+        }
+
+        .swatch-group {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .swatch {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.15s, border-color 0.15s;
+        }
+        .swatch:hover { transform: scale(1.15); }
+        .swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent); }
+
         .video-stage {
             width: 100%;
-            max-width: 850px;
+            max-width: 900px;
             border-radius: 16px;
             overflow: hidden;
             box-shadow: 0 10px 40px rgba(0,0,0,0.15);
             border: 1px solid var(--border-color);
-            margin-top: 10px;
+            margin-top: 5px;
             position: relative;
-            background: var(--board-bg);
+            background: #1e1e2e;
             aspect-ratio: 16 / 9;
         }
 
@@ -112,6 +169,7 @@
             display: block;
             object-fit: contain;
             cursor: crosshair;
+            touch-action: none;
         }
 
         #cameraVideo {
@@ -141,7 +199,7 @@
 
         .help-banner {
             width: 100%;
-            max-width: 850px;
+            max-width: 900px;
             background: #fff8e1;
             border: 1px solid #ffe0b2;
             border-radius: 10px;
@@ -151,7 +209,6 @@
             margin-bottom: 15px;
             display: none;
         }
-
         .help-banner.visible { display: block; }
         .help-banner code {
             background: #fff3cd;
@@ -162,7 +219,7 @@
 
         .mute-note {
             width: 100%;
-            max-width: 850px;
+            max-width: 900px;
             font-size: 13px;
             color: #888;
             text-align: center;
@@ -170,7 +227,6 @@
             font-style: italic;
         }
 
-        /* Petit indicateur pour dire que la caméra est déplaçable */
         .drag-hint {
             position: absolute;
             bottom: 10px;
@@ -184,6 +240,7 @@
             pointer-events: none;
             opacity: 0.85;
             transition: opacity 0.3s;
+            z-index: 5;
         }
     </style>
 </head>
@@ -206,13 +263,57 @@
             <button id="recordBtn" onclick="toggleRecording()" disabled>⏺ Enregistrer</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
-        <div class="mute-note">🔇 TTS désactivé (muet) · Tableau d'écriture + caméra ronde déplaçable</div>
+        <div class="mute-note">🔇 TTS désactivé (muet) · Tableau + caméra ronde personnalisable</div>
+    </div>
+
+    <!-- Barre d'options -->
+    <div class="options-bar">
+        <label>🎨 Tableau :
+            <div class="swatch-group" id="boardSwatches">
+                <div class="swatch" data-color="#1e1e2e" style="background:#1e1e2e" title="Ardoise sombre"></div>
+                <div class="swatch" data-color="#0d3b66" style="background:#0d3b66" title="Bleu nuit"></div>
+                <div class="swatch" data-color="#2d4a22" style="background:#2d4a22" title="Vert forêt"></div>
+                <div class="swatch" data-color="#4a1e2e" style="background:#4a1e2e" title="Bordeaux"></div>
+                <div class="swatch" data-color="#fdf6e3" style="background:#fdf6e3;border:1px solid #ccc" title="Crème clair"></div>
+                <div class="swatch active" data-color="#1e1e2e" style="background:#1e1e2e" title="Ardoise (défaut)"></div>
+            </div>
+        </label>
+
+        <label>🖼️ Cadre :
+            <select id="frameSelect">
+                <option value="none">Aucun</option>
+                <option value="white" selected>Blanc épais</option>
+                <option value="glow">Halo lumineux</option>
+                <option value="neon">Néon</option>
+                <option value="gold">Or</option>
+                <option value="dashed">Pointillé</option>
+            </select>
+        </label>
+
+        <label>✨ Filtre caméra :
+            <select id="filterSelect">
+                <option value="none">Aucun</option>
+                <option value="warm">Chaleureux</option>
+                <option value="cool">Froid</option>
+                <option value="sepia">Sépia</option>
+                <option value="grayscale">Noir & blanc</option>
+                <option value="vintage">Vintage</option>
+                <option value="vivid">Vif</option>
+                <option value="soft">Doux</option>
+                <option value="contrast">Contraste</option>
+            </select>
+        </label>
+
+        <label>📏 Taille :
+            <input type="range" id="camSize" min="80" max="360" value="160" step="10">
+            <span id="camSizeVal" style="font-weight:700;color:var(--accent);min-width:38px;">160</span>
+        </label>
     </div>
 
     <div class="video-stage" id="videoStage">
         <canvas id="boardCanvas" width="1280" height="720"></canvas>
         <video id="cameraVideo" autoplay playsinline muted></video>
-        <div class="drag-hint" id="dragHint">✋ Glissez la caméra pour la déplacer</div>
+        <div class="drag-hint" id="dragHint">✋ Glissez la caméra · ↕️ Molette pour redimensionner</div>
     </div>
 
     <script>
@@ -228,7 +329,6 @@
         const boardCanvas = document.getElementById('boardCanvas');
         const boardCtx = boardCanvas.getContext('2d');
         const videoElement = document.getElementById('cameraVideo');
-        const stage = document.getElementById('videoStage');
         let cameraStream = null;
         let cameraReady = false;
         let animationFrameId = null;
@@ -240,7 +340,7 @@
         const RECORD_DURATION_MS = 300000;
         let recordTimer = null;
 
-        // Audio recording
+        // Audio
         let audioCtx = null;
         let micStream = null;
         let micAnalyser = null;
@@ -253,21 +353,44 @@
         let torchEnabled = false;
         let torchTrack = null;
 
+        // --- Personnalisation ---
+        let boardColor = '#1e1e2e';
+        let frameStyle = 'white';   // none | white | glow | neon | gold | dashed
+        let cameraFilter = 'none';  // none | warm | cool | sepia | grayscale | vintage | vivid | soft | contrast
+        let camSize = 160;          // taille demandée (rayon de base en px canvas, ajusté au rendu)
+
         // --- Caméra ronde déplaçable ---
-        // Position en pixels dans le canvas (coordonnées canvas, pas CSS)
         let camX = 0;
         let camY = 0;
-        let camRadius = 120; // sera recalculé selon la taille du canvas
+        let camRadius = 160;
         let isDragging = false;
         let dragOffsetX = 0;
         let dragOffsetY = 0;
         let hasDraggedOnce = false;
+        let isResizing = false;
+        let resizeStartDist = 0;
+        let resizeStartRadius = 0;
 
         function setStatus(msg, type = '') {
             const el = document.getElementById('statusMsg');
             el.textContent = msg;
             el.className = 'status-msg' + (type ? ' ' + type : '');
             console.log('[STATUS]', msg);
+        }
+
+        // ==================== FILTRES CANVAS ====================
+        function getFilterString() {
+            switch (cameraFilter) {
+                case 'warm':      return 'saturate(1.3) sepia(0.25) brightness(1.05)';
+                case 'cool':      return 'saturate(1.1) hue-rotate(-15deg) brightness(1.03)';
+                case 'sepia':     return 'sepia(0.85) contrast(1.05)';
+                case 'grayscale': return 'grayscale(1) contrast(1.1)';
+                case 'vintage':   return 'sepia(0.4) saturate(1.4) contrast(0.9) brightness(1.05)';
+                case 'vivid':     return 'saturate(1.7) contrast(1.15) brightness(1.05)';
+                case 'soft':      return 'saturate(0.85) brightness(1.12) contrast(0.92) blur(0.4px)';
+                case 'contrast':  return 'contrast(1.35) saturate(1.2)';
+                default:          return 'none';
+            }
         }
 
         // ==================== INIT CAMÉRA ====================
@@ -279,7 +402,6 @@
                 banner.classList.add('visible');
                 return;
             }
-
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 setStatus('❌ getUserMedia non disponible', 'error');
                 banner.classList.add('visible');
@@ -288,14 +410,9 @@
 
             try {
                 setStatus('Demande d\'accès à la caméra...', 'info');
-
                 try {
                     cameraStream = await navigator.mediaDevices.getUserMedia({
-                        video: { 
-                            facingMode: 'user',
-                            width: { ideal: 1280 }, 
-                            height: { ideal: 720 } 
-                        },
+                        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
                         audio: false
                     });
                 } catch (constraintErr) {
@@ -310,30 +427,24 @@
                 await videoElement.play();
                 cameraReady = true;
                 banner.classList.remove('visible');
-                setStatus('✅ Caméra active (ronde, déplaçable) · TTS muet', 'success');
+                setStatus('✅ Caméra active · table + caméra personnalisables', 'success');
 
                 setupTorch();
                 startBoardRendering();
-
             } catch (err) {
                 let msg = '❌ ';
                 switch (err.name) {
                     case 'NotAllowedError':
                     case 'PermissionDeniedError':
-                        msg += 'Permission refusée. Autorisez la caméra dans la barre d\'adresse.';
+                        msg += 'Permission refusée. Autorisez la caméra.';
                         break;
-                    case 'NotFoundError':
-                        msg += 'Aucune caméra détectée.';
-                        break;
-                    case 'NotReadableError':
-                        msg += 'Caméra déjà utilisée par une autre application.';
-                        break;
+                    case 'NotFoundError': msg += 'Aucune caméra détectée.'; break;
+                    case 'NotReadableError': msg += 'Caméra utilisée ailleurs.'; break;
                     case 'SecurityError':
-                        msg += 'Contexte non sécurisé (HTTPS ou localhost requis).';
+                        msg += 'Contexte non sécurisé (HTTPS/localhost).';
                         banner.classList.add('visible');
                         break;
-                    default:
-                        msg += err.name + ' – ' + err.message;
+                    default: msg += err.name + ' – ' + err.message;
                 }
                 setStatus(msg, 'error');
             }
@@ -346,36 +457,25 @@
             if (!track) return;
             torchTrack = track;
             const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-            if (capabilities.torch) {
-                btn.disabled = false;
-            } else {
-                btn.disabled = true;
-                btn.title = 'Torche non supportée sur cet appareil';
-            }
+            if (capabilities.torch) btn.disabled = false;
+            else { btn.disabled = true; btn.title = 'Torche non supportée'; }
         }
 
         async function toggleTorch() {
             if (!torchTrack) return;
             try {
                 torchEnabled = !torchEnabled;
-                await torchTrack.applyConstraints({
-                    advanced: [{ torch: torchEnabled }]
-                });
+                await torchTrack.applyConstraints({ advanced: [{ torch: torchEnabled }] });
                 const btn = document.getElementById('torchBtn');
-                if (torchEnabled) {
-                    btn.classList.add('active');
-                    btn.innerText = '🔦 Flash : ON';
-                } else {
-                    btn.classList.remove('active');
-                    btn.innerText = '🔦 Flash : OFF';
-                }
+                if (torchEnabled) { btn.classList.add('active'); btn.innerText = '🔦 Flash : ON'; }
+                else { btn.classList.remove('active'); btn.innerText = '🔦 Flash : OFF'; }
             } catch (err) {
-                setStatus('Torche non disponible sur cet appareil', 'error');
+                setStatus('Torche non disponible', 'error');
                 torchEnabled = false;
             }
         }
 
-        // ==================== GESTION DU GLISSER-DÉPOSER ====================
+        // ==================== GESTION SOURIS / TOUCH ====================
         function getCanvasCoords(evt) {
             const rect = boardCanvas.getBoundingClientRect();
             const scaleX = boardCanvas.width / rect.width;
@@ -395,9 +495,28 @@
             return (dx * dx + dy * dy) <= (camRadius * camRadius);
         }
 
+        // Détecte si on est proche du bord (pour redimensionner)
+        function isNearEdge(pos) {
+            if (!cameraReady) return false;
+            const dx = pos.x - camX;
+            const dy = pos.y - camY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            return dist > camRadius * 0.8 && dist <= camRadius + 15;
+        }
+
         function onPointerDown(evt) {
             const pos = getCanvasCoords(evt);
             if (isInsideCamera(pos)) {
+                if (isNearEdge(pos) && evt.touches && evt.touches.length === 2) {
+                    // Redimensionnement à deux doigts
+                    const t1 = evt.touches[0];
+                    const t2 = evt.touches[1];
+                    resizeStartDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+                    resizeStartRadius = camRadius;
+                    isResizing = true;
+                    evt.preventDefault();
+                    return;
+                }
                 isDragging = true;
                 dragOffsetX = pos.x - camX;
                 dragOffsetY = pos.y - camY;
@@ -405,32 +524,39 @@
                 evt.preventDefault();
 
                 const hint = document.getElementById('dragHint');
-                if (hint && !hasDraggedOnce) {
-                    hint.style.opacity = '0';
-                }
+                if (hint && !hasDraggedOnce) hint.style.opacity = '0';
             }
         }
 
         function onPointerMove(evt) {
             const pos = getCanvasCoords(evt);
+            if (isResizing && evt.touches && evt.touches.length === 2) {
+                const t1 = evt.touches[0];
+                const t2 = evt.touches[1];
+                const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+                const ratio = dist / resizeStartDist;
+                const newRadius = Math.max(60, Math.min(500, resizeStartRadius * ratio));
+                camRadius = newRadius;
+                camSize = Math.round(newRadius);
+                document.getElementById('camSize').value = Math.min(360, Math.max(80, camSize));
+                document.getElementById('camSizeVal').textContent = document.getElementById('camSize').value;
+                evt.preventDefault();
+                return;
+            }
+
             if (isDragging) {
                 let newX = pos.x - dragOffsetX;
                 let newY = pos.y - dragOffsetY;
-
-                // Contraindre à l'intérieur du canvas
                 newX = Math.max(camRadius, Math.min(boardCanvas.width - camRadius, newX));
                 newY = Math.max(camRadius, Math.min(boardCanvas.height - camRadius, newY));
-
                 camX = newX;
                 camY = newY;
                 hasDraggedOnce = true;
                 evt.preventDefault();
             } else {
-                if (isInsideCamera(pos)) {
-                    boardCanvas.style.cursor = 'grab';
-                } else {
-                    boardCanvas.style.cursor = 'crosshair';
-                }
+                if (isNearEdge(pos)) boardCanvas.style.cursor = 'ew-resize';
+                else if (isInsideCamera(pos)) boardCanvas.style.cursor = 'grab';
+                else boardCanvas.style.cursor = 'crosshair';
             }
         }
 
@@ -440,28 +566,79 @@
                 boardCanvas.style.cursor = 'crosshair';
                 evt.preventDefault();
             }
+            if (isResizing) {
+                isResizing = false;
+                evt.preventDefault();
+            }
         }
 
-        // Attacher les événements
+        // Molette pour redimensionner quand la souris est sur la caméra
+        boardCanvas.addEventListener('wheel', (evt) => {
+            const pos = getCanvasCoords(evt);
+            if (isInsideCamera(pos)) {
+                evt.preventDefault();
+                const delta = evt.deltaY > 0 ? -12 : 12;
+                camRadius = Math.max(60, Math.min(500, camRadius + delta));
+                camSize = Math.round(camRadius);
+                const slider = document.getElementById('camSize');
+                slider.value = Math.min(360, Math.max(80, camSize));
+                document.getElementById('camSizeVal').textContent = slider.value;
+            }
+        }, { passive: false });
+
         boardCanvas.addEventListener('mousedown', onPointerDown);
         window.addEventListener('mousemove', onPointerMove);
         window.addEventListener('mouseup', onPointerUp);
 
-        // Support tactile
         boardCanvas.addEventListener('touchstart', onPointerDown, { passive: false });
         window.addEventListener('touchmove', onPointerMove, { passive: false });
         window.addEventListener('touchend', onPointerUp, { passive: false });
 
-        // ==================== RENDU DU TABLEAU + CAMÉRA RONDE ====================
+        // ==================== OPTIONS UI ====================
+        // Couleur du tableau
+        document.querySelectorAll('#boardSwatches .swatch').forEach(sw => {
+            sw.addEventListener('click', () => {
+                document.querySelectorAll('#boardSwatches .swatch').forEach(s => s.classList.remove('active'));
+                sw.classList.add('active');
+                boardColor = sw.dataset.color;
+                setStatus('🎨 Couleur du tableau changée', 'info');
+            });
+        });
+
+        // Cadre
+        document.getElementById('frameSelect').addEventListener('change', (e) => {
+            frameStyle = e.target.value;
+            setStatus('🖼️ Cadre : ' + e.target.options[e.target.selectedIndex].text, 'info');
+        });
+
+        // Filtre caméra
+        document.getElementById('filterSelect').addEventListener('change', (e) => {
+            cameraFilter = e.target.value;
+            setStatus('✨ Filtre caméra : ' + e.target.options[e.target.selectedIndex].text, 'info');
+        });
+
+        // Taille caméra (slider)
+        const camSizeSlider = document.getElementById('camSize');
+        const camSizeVal = document.getElementById('camSizeVal');
+        camSizeSlider.addEventListener('input', (e) => {
+            camSize = parseInt(e.target.value, 10);
+            camRadius = camSize;
+            camSizeVal.textContent = camSize;
+        });
+
+        // ==================== RENDU ====================
         function drawBoardBackground() {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
-            // Tableau sombre style "ardoise"
-            boardCtx.fillStyle = '#1e1e2e';
+
+            boardCtx.fillStyle = boardColor;
             boardCtx.fillRect(0, 0, W, H);
 
-            // Lignes de cahier subtiles
-            boardCtx.strokeStyle = 'rgba(255,255,255,0.04)';
+            // Détecter si le fond est clair pour ajuster les lignes
+            const isLight = isLightColor(boardColor);
+
+            // Lignes
+            boardCtx.strokeStyle = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)';
             boardCtx.lineWidth = 1;
             for (let y = 100; y < H; y += 60) {
                 boardCtx.beginPath();
@@ -469,8 +646,8 @@
                 boardCtx.lineTo(W - 40, y);
                 boardCtx.stroke();
             }
-            // Marge rouge à gauche
-            boardCtx.strokeStyle = 'rgba(217,83,79,0.15)';
+            // Marge
+            boardCtx.strokeStyle = isLight ? 'rgba(217,83,79,0.25)' : 'rgba(217,83,79,0.25)';
             boardCtx.lineWidth = 2;
             boardCtx.beginPath();
             boardCtx.moveTo(80, 40);
@@ -478,24 +655,34 @@
             boardCtx.stroke();
         }
 
+        function isLightColor(hex) {
+            const c = hex.replace('#', '');
+            const r = parseInt(c.substr(0, 2), 16);
+            const g = parseInt(c.substr(2, 2), 16);
+            const b = parseInt(c.substr(4, 2), 16);
+            const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            return lum > 0.6;
+        }
+
         function drawSentenceOnBoard(item, index, total) {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
+            const isLight = isLightColor(boardColor);
 
             if (!item) {
                 boardCtx.font = 'bold 36px "Segoe UI", sans-serif';
                 boardCtx.textAlign = 'center';
                 boardCtx.textBaseline = 'middle';
-                boardCtx.fillStyle = 'rgba(255,255,255,0.25)';
+                boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)';
                 boardCtx.fillText('Chargez une liste pour commencer', W / 2, H / 2);
                 return;
             }
 
-            const textColor = item.isEnglish ? '#ff8a80' : '#82b1ff';
+            const textColor = item.isEnglish ? '#ff6b6b' : '#4dabf7';
             const badgeColor = item.isEnglish ? '#d9534f' : '#0275d8';
             const badgeText = item.isEnglish ? 'EN' : 'FR';
 
-            // --- Badge EN/FR en haut à gauche ---
+            // Badge
             boardCtx.font = 'bold 20px "Segoe UI", sans-serif';
             const badgeWidth = boardCtx.measureText(badgeText).width + 36;
             boardCtx.fillStyle = badgeColor;
@@ -506,120 +693,180 @@
             boardCtx.textBaseline = 'middle';
             boardCtx.fillText(badgeText, 40 + badgeWidth / 2, 63);
 
-            // --- Progression ---
+            // Progression
             if (total > 0) {
                 boardCtx.font = '16px "Segoe UI", sans-serif';
-                boardCtx.fillStyle = 'rgba(255,255,255,0.5)';
+                boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)';
                 boardCtx.textAlign = 'right';
                 boardCtx.fillText(`${index + 1} / ${total}`, W - 40, 63);
             }
 
-            // --- Texte principal (avec retour à la ligne) ---
+            // Texte principal
             boardCtx.font = 'bold 64px "Segoe UI", sans-serif';
             boardCtx.textAlign = 'center';
             boardCtx.textBaseline = 'middle';
 
-            const maxWidth = W - 260; // laisse de la place pour la caméra ronde
+            const maxWidth = W - 260;
             const words = item.text.split(' ');
             const lines = [];
             let currentLine = '';
-
             words.forEach(word => {
                 const testLine = currentLine ? currentLine + ' ' + word : word;
-                const metrics = boardCtx.measureText(testLine);
-                if (metrics.width > maxWidth && currentLine) {
+                if (boardCtx.measureText(testLine).width > maxWidth && currentLine) {
                     lines.push(currentLine);
                     currentLine = word;
-                } else {
-                    currentLine = testLine;
-                }
+                } else currentLine = testLine;
             });
             lines.push(currentLine);
 
             const lineHeight = 82;
             const totalHeight = lines.length * lineHeight;
             const startY = (H / 2) - (totalHeight / 2) + 10;
-
             lines.forEach((line, i) => {
                 boardCtx.fillStyle = textColor;
                 boardCtx.fillText(line, W / 2, startY + (i * lineHeight));
             });
 
-            // --- Indicateur de répétition ---
+            // Répétition
             if (isPlaying && item.maxRepeats > 1) {
                 boardCtx.font = '20px "Segoe UI", sans-serif';
-                boardCtx.fillStyle = 'rgba(255,255,255,0.55)';
+                boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.55)';
                 boardCtx.textAlign = 'center';
                 boardCtx.fillText(`Répétition ${repeatCounter + 1} / ${item.maxRepeats}`, W / 2, H - 80);
             }
 
-            // --- Barre de progression ---
+            // Progression
             if (isPlaying) {
                 const progress = (index + (repeatCounter / (item.maxRepeats || 1))) / Math.max(1, total);
                 const barWidth = W * 0.5;
                 const barX = (W - barWidth) / 2;
                 const barY = H - 45;
-
-                boardCtx.fillStyle = 'rgba(255,255,255,0.1)';
+                boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
                 drawRoundRect(boardCtx, barX, barY, barWidth, 8, 4);
                 boardCtx.fill();
-
                 boardCtx.fillStyle = '#6c5ce7';
                 drawRoundRect(boardCtx, barX, barY, barWidth * Math.min(progress, 1), 8, 4);
                 boardCtx.fill();
             }
         }
 
+        // Dessine le cadre autour de la caméra selon le style
+        function drawCameraFrame(radius) {
+            boardCtx.save();
+            switch (frameStyle) {
+                case 'white':
+                    boardCtx.beginPath();
+                    boardCtx.arc(camX, camY, radius + 6, 0, Math.PI * 2);
+                    boardCtx.strokeStyle = 'rgba(255,255,255,0.95)';
+                    boardCtx.lineWidth = 7;
+                    boardCtx.stroke();
+                    break;
+                case 'glow':
+                    boardCtx.shadowColor = '#6c5ce7';
+                    boardCtx.shadowBlur = 30;
+                    boardCtx.beginPath();
+                    boardCtx.arc(camX, camY, radius + 3, 0, Math.PI * 2);
+                    boardCtx.strokeStyle = '#a29bfe';
+                    boardCtx.lineWidth = 6;
+                    boardCtx.stroke();
+                    boardCtx.shadowBlur = 0;
+                    break;
+                case 'neon':
+                    boardCtx.beginPath();
+                    boardCtx.arc(camX, camY, radius + 4, 0, Math.PI * 2);
+                    boardCtx.strokeStyle = '#00e5ff';
+                    boardCtx.lineWidth = 6;
+                    boardCtx.shadowColor = '#00e5ff';
+                    boardCtx.shadowBlur = 18;
+                    boardCtx.stroke();
+                    boardCtx.shadowBlur = 0;
+                    break;
+                case 'gold':
+                    const grad = boardCtx.createLinearGradient(camX - radius, camY - radius, camX + radius, camY + radius);
+                    grad.addColorStop(0, '#f9d423');
+                    grad.addColorStop(0.5, '#ff4e50');
+                    grad.addColorStop(1, '#f9d423');
+                    boardCtx.beginPath();
+                    boardCtx.arc(camX, camY, radius + 5, 0, Math.PI * 2);
+                    boardCtx.strokeStyle = grad;
+                    boardCtx.lineWidth = 8;
+                    boardCtx.stroke();
+                    break;
+                case 'dashed':
+                    boardCtx.beginPath();
+                    boardCtx.arc(camX, camY, radius + 5, 0, Math.PI * 2);
+                    boardCtx.strokeStyle = 'rgba(255,255,255,0.9)';
+                    boardCtx.lineWidth = 6;
+                    boardCtx.setLineDash([14, 10]);
+                    boardCtx.stroke();
+                    boardCtx.setLineDash([]);
+                    break;
+                case 'none':
+                default:
+                    boardCtx.beginPath();
+                    boardCtx.arc(camX, camY, radius, 0, Math.PI * 2);
+                    boardCtx.strokeStyle = 'rgba(255,255,255,0.3)';
+                    boardCtx.lineWidth = 1;
+                    boardCtx.stroke();
+                    break;
+            }
+            boardCtx.restore();
+        }
+
         function drawCameraCircle() {
             if (!cameraReady || videoElement.readyState < 2) return;
 
-            // Recalculer le rayon selon la taille (environ 18% de la largeur)
-            camRadius = Math.round(boardCanvas.width * 0.18);
-            // Si la caméra n'a jamais été positionnée, la mettre en bas à droite
+            // Adapter le rayon à la taille du canvas (base 1280px de large)
+            const baseRadius = camRadius; // en px du canvas
+            const radius = baseRadius;
+
+            // Position par défaut
             if (camX === 0 && camY === 0) {
-                camX = boardCanvas.width - camRadius - 40;
-                camY = boardCanvas.height - camRadius - 40;
+                camX = boardCanvas.width - radius - 50;
+                camY = boardCanvas.height - radius - 50;
             }
 
-            // Bordure lumineuse
+            // Ombre
             boardCtx.save();
             boardCtx.beginPath();
-            boardCtx.arc(camX, camY, camRadius + 6, 0, Math.PI * 2);
-            boardCtx.fillStyle = 'rgba(0,0,0,0.25)';
+            boardCtx.arc(camX, camY, radius + 8, 0, Math.PI * 2);
+            boardCtx.fillStyle = 'rgba(0,0,0,0.3)';
             boardCtx.fill();
             boardCtx.restore();
 
-            // Clip circulaire + dessin vidéo (non miroir = image normale)
+            // Clip + vidéo avec filtre
             boardCtx.save();
             boardCtx.beginPath();
-            boardCtx.arc(camX, camY, camRadius, 0, Math.PI * 2);
+            boardCtx.arc(camX, camY, radius, 0, Math.PI * 2);
             boardCtx.closePath();
             boardCtx.clip();
 
             const videoW = videoElement.videoWidth || 640;
             const videoH = videoElement.videoHeight || 480;
-            const diameter = camRadius * 2;
+            const diameter = radius * 2;
             const scale = Math.max(diameter / videoW, diameter / videoH);
             const drawW = videoW * scale;
             const drawH = videoH * scale;
             const offsetX = camX - drawW / 2;
             const offsetY = camY - drawH / 2;
 
+            boardCtx.filter = getFilterString();
             boardCtx.drawImage(videoElement, offsetX, offsetY, drawW, drawH);
+            boardCtx.filter = 'none';
             boardCtx.restore();
 
-            // Anneau extérieur
-            boardCtx.beginPath();
-            boardCtx.arc(camX, camY, camRadius, 0, Math.PI * 2);
-            boardCtx.strokeStyle = torchEnabled ? '#f1c40f' : 'rgba(255,255,255,0.9)';
-            boardCtx.lineWidth = 5;
-            boardCtx.stroke();
+            // Cadre
+            drawCameraFrame(radius);
 
-            // Petite ombre portée
+            // Poignée visuelle (petit point pour indiquer la zone de redimensionnement)
             boardCtx.beginPath();
-            boardCtx.arc(camX, camY, camRadius + 2, 0, Math.PI * 2);
-            boardCtx.strokeStyle = 'rgba(0,0,0,0.2)';
-            boardCtx.lineWidth = 2;
+            boardCtx.arc(camX, camY + radius - 4, 5, 0, Math.PI * 2);
+            boardCtx.fillStyle = 'rgba(255,255,255,0.85)';
+            boardCtx.fill();
+            boardCtx.beginPath();
+            boardCtx.arc(camX, camY + radius - 4, 5, 0, Math.PI * 2);
+            boardCtx.strokeStyle = 'rgba(0,0,0,0.4)';
+            boardCtx.lineWidth = 1;
             boardCtx.stroke();
         }
 
@@ -645,20 +892,14 @@
                 }
                 lastRenderTime = timestamp;
 
-                // 1) Fond du tableau
                 drawBoardBackground();
-
-                // 2) Texte de la phrase
                 const activeIndex = isPlaying ? currentIndex : 0;
                 const item = sentenceData[activeIndex];
                 drawSentenceOnBoard(item, activeIndex, sentenceData.length);
-
-                // 3) Caméra ronde par-dessus
                 drawCameraCircle();
 
                 animationFrameId = requestAnimationFrame(render);
             }
-
             animationFrameId = requestAnimationFrame(render);
         }
 
@@ -667,9 +908,7 @@
             stopSpeech();
             const input = document.getElementById('textInput').value;
             const lines = input.split('\n').map(l => l.trim()).filter(l => l !== "");
-
             sentenceData = [];
-
             lines.forEach((line, index) => {
                 const isEnglish = index % 2 === 0;
                 sentenceData.push({
@@ -679,7 +918,6 @@
                     maxRepeats: isEnglish ? 3 : 2
                 });
             });
-
             if (sentenceData.length > 0) {
                 document.getElementById('playBtn').disabled = false;
                 document.getElementById('recordBtn').disabled = false;
@@ -695,58 +933,41 @@
         function estimateDuration(text, isEnglish) {
             const words = text.split(/\s+/).length;
             const wpm = isEnglish ? 140 : 160;
-            const minutes = words / wpm;
-            const sec = Math.max(2, minutes * 60);
-            return Math.round(sec * 1000 + 500);
+            return Math.round(Math.max(2, (words / wpm) * 60) * 1000 + 500);
         }
 
         function speakStep() {
             if (!isPlaying || isPaused) return;
-
             if (currentIndex >= sentenceData.length) {
                 if (isLooping) {
-                    currentIndex = 0;
-                    repeatCounter = 0;
+                    currentIndex = 0; repeatCounter = 0;
                     setTimeout(speakStep, 1000);
-                } else {
-                    stopSpeech();
-                }
+                } else stopSpeech();
                 return;
             }
-
             const currentItem = sentenceData[currentIndex];
             const utterance = new SpeechSynthesisUtterance(currentItem.text);
             utterance.lang = currentItem.lang;
-
             const voices = synth.getVoices();
             const voice = voices.find(v => v.lang.startsWith(currentItem.lang));
             if (voice) utterance.voice = voice;
-
-            // TTS muet
-            utterance.volume = 0.0;
+            utterance.volume = 0.0; // muet
             utterance.rate = 0.95;
             utterance.pitch = 1.0;
-
             sentenceDurationMs = estimateDuration(currentItem.text, currentItem.isEnglish);
             sentenceStartTime = Date.now();
 
             utterance.onend = () => {
                 if (!isPlaying || isPaused) return;
                 repeatCounter++;
-                if (repeatCounter < currentItem.maxRepeats) {
-                    setTimeout(speakStep, 400);
-                } else {
+                if (repeatCounter < currentItem.maxRepeats) setTimeout(speakStep, 400);
+                else {
                     currentIndex++;
                     repeatCounter = 0;
                     setTimeout(speakStep, 800);
                 }
             };
-
-            utterance.onerror = (e) => {
-                console.warn('Erreur TTS:', e);
-                if (isPlaying) stopSpeech();
-            };
-
+            utterance.onerror = (e) => { console.warn('TTS:', e); if (isPlaying) stopSpeech(); };
             synth.speak(utterance);
         }
 
@@ -757,19 +978,16 @@
             isPaused = false;
             currentIndex = 0;
             repeatCounter = 0;
-
             document.getElementById('playBtn').style.display = 'none';
             document.getElementById('pauseBtn').style.display = 'flex';
             document.getElementById('pauseBtn').innerText = "⏸ Pause";
-
             speakStep();
         }
 
         function togglePause() {
             if (!isPlaying) return;
             if (!isPaused) {
-                isPaused = true;
-                synth.pause();
+                isPaused = true; synth.pause();
                 document.getElementById('pauseBtn').innerText = "▶ Reprendre";
             } else {
                 isPaused = false;
@@ -780,9 +998,7 @@
         }
 
         function stopSpeech() {
-            isPlaying = false;
-            isPaused = false;
-            synth.cancel();
+            isPlaying = false; isPaused = false; synth.cancel();
             document.getElementById('playBtn').style.display = 'flex';
             document.getElementById('playBtn').disabled = (sentenceData.length === 0);
             document.getElementById('pauseBtn').style.display = 'none';
@@ -791,61 +1007,35 @@
         function toggleLoop() {
             isLooping = !isLooping;
             const btn = document.getElementById('loopBtn');
-            if (isLooping) {
-                btn.classList.add('active');
-                btn.innerText = "🔁 Boucle : ON";
-            } else {
-                btn.classList.remove('active');
-                btn.innerText = "🔁 Boucle : OFF";
-            }
+            if (isLooping) { btn.classList.add('active'); btn.innerText = "🔁 Boucle : ON"; }
+            else { btn.classList.remove('active'); btn.innerText = "🔁 Boucle : OFF"; }
         }
 
-        // ==================== MIC (pour l'enregistrement) ====================
+        // ==================== MIC ====================
         async function startMicCapture() {
             try {
-                const micConstraints = {
-                    audio: {
-                        echoCancellation: false,
-                        noiseSuppression: false,
-                        autoGainControl: false,
-                        sampleRate: 48000
-                    }
-                };
-                micStream = await navigator.mediaDevices.getUserMedia(micConstraints);
-
+                micStream = await navigator.mediaDevices.getUserMedia({
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, sampleRate: 48000 }
+                });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                if (audioCtx.state === 'suspended') {
-                    await audioCtx.resume();
-                }
-
+                if (audioCtx.state === 'suspended') await audioCtx.resume();
                 micSource = audioCtx.createMediaStreamSource(micStream);
                 micAnalyser = audioCtx.createAnalyser();
                 micAnalyser.fftSize = 256;
                 micSource.connect(micAnalyser);
-
                 recordDestination = audioCtx.createMediaStreamDestination();
                 micSource.connect(recordDestination);
-
                 return recordDestination.stream;
             } catch (err) {
-                console.error('Micro non accessible:', err);
-                setStatus('⚠️ Micro inaccessible : ' + err.name + '. La vidéo n\'aura pas de son.', 'warn');
+                setStatus('⚠️ Micro inaccessible : ' + err.name, 'warn');
                 return null;
             }
         }
 
         function stopMicCapture() {
-            if (micStream) {
-                micStream.getTracks().forEach(t => t.stop());
-                micStream = null;
-            }
-            if (audioCtx) {
-                audioCtx.close().catch(() => {});
-                audioCtx = null;
-            }
-            micAnalyser = null;
-            micSource = null;
-            recordDestination = null;
+            if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+            if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+            micAnalyser = null; micSource = null; recordDestination = null;
         }
 
         // ==================== ENREGISTREMENT ====================
@@ -865,54 +1055,33 @@
                 'video/webm;codecs=vp8,opus',
                 'video/webm'
             ];
-            for (const c of candidates) {
-                if (MediaRecorder.isTypeSupported(c)) {
-                    console.log('MIME retenu:', c);
-                    return c;
-                }
-            }
+            for (const c of candidates) if (MediaRecorder.isTypeSupported(c)) return c;
             return 'video/webm';
         }
 
         async function startRecording() {
-            if (sentenceData.length === 0) {
-                setStatus('Chargez d\'abord une liste', 'error');
-                return;
-            }
-            if (!cameraReady) {
-                await initCamera();
-                await new Promise(r => setTimeout(r, 800));
-            }
+            if (sentenceData.length === 0) { setStatus('Chargez d\'abord une liste', 'error'); return; }
+            if (!cameraReady) { await initCamera(); await new Promise(r => setTimeout(r, 800)); }
 
             setStatus('🎤 Demande d\'accès au micro...', 'info');
-
             const micAudioStream = await startMicCapture();
-            if (!micAudioStream) {
-                setStatus('❌ Impossible d\'enregistrer le son : autorisez le micro.', 'error');
-                return;
-            }
+            if (!micAudioStream) { setStatus('❌ Micro requis pour le son.', 'error'); return; }
 
             recordedChunks = [];
             const canvasStream = boardCanvas.captureStream(30);
-
             const combinedStream = new MediaStream([
                 ...canvasStream.getVideoTracks(),
                 ...micAudioStream.getAudioTracks()
             ]);
-
             const mimeType = pickBestMimeType();
 
             try {
                 mediaRecorder = new MediaRecorder(combinedStream, { 
-                    mimeType,
-                    videoBitsPerSecond: 4000000,
-                    audioBitsPerSecond: 128000
+                    mimeType, videoBitsPerSecond: 4000000, audioBitsPerSecond: 128000
                 });
             } catch (e) {
-                console.error('Erreur MediaRecorder:', e);
                 setStatus('Enregistrement non supporté : ' + e.message, 'error');
-                stopMicCapture();
-                return;
+                stopMicCapture(); return;
             }
 
             mediaRecorder.ondataavailable = (event) => {
@@ -921,59 +1090,41 @@
 
             mediaRecorder.onstop = () => {
                 stopMicCapture();
-
                 if (recordedChunks.length === 0) {
                     setStatus('Aucune donnée enregistrée', 'error');
-                    isRecording = false;
-                    return;
+                    isRecording = false; return;
                 }
-
                 const actualMime = mediaRecorder.mimeType || mimeType;
                 const ext = actualMime.includes('mp4') ? 'mp4' : 'webm';
                 const blob = new Blob(recordedChunks, { type: actualMime.split(';')[0] });
-
                 if (blob.size < 1000) {
                     setStatus('Enregistrement trop court ou vide', 'error');
-                    isRecording = false;
-                    return;
+                    isRecording = false; return;
                 }
-
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = `apprentissage-bilingue-${Date.now()}.${ext}`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
                 setTimeout(() => URL.revokeObjectURL(url), 10000);
-
                 setStatus(`✅ Vidéo téléchargée (${ext.toUpperCase()}, ${(blob.size/1024/1024).toFixed(1)} Mo)`, 'success');
-
                 isRecording = false;
                 const btn = document.getElementById('recordBtn');
-                btn.classList.remove('recording');
-                btn.innerText = '⏺ Enregistrer';
+                btn.classList.remove('recording'); btn.innerText = '⏺ Enregistrer';
             };
 
             mediaRecorder.onerror = (e) => {
-                console.error('MediaRecorder error:', e);
                 setStatus('Erreur d\'enregistrement : ' + (e.error?.message || e.error), 'error');
                 stopMicCapture();
             };
 
             mediaRecorder.start(1000);
             isRecording = true;
-
             const btn = document.getElementById('recordBtn');
-            btn.classList.add('recording');
-            btn.innerText = '⏹ Arrêter';
+            btn.classList.add('recording'); btn.innerText = '⏹ Arrêter';
             setStatus(`⏺ Enregistrement (tableau + caméra ronde, TTS muet)...`, 'success');
-
             if (!isPlaying) startPlayAll();
-
-            recordTimer = setTimeout(() => {
-                if (isRecording) stopRecording();
-            }, RECORD_DURATION_MS);
+            recordTimer = setTimeout(() => { if (isRecording) stopRecording(); }, RECORD_DURATION_MS);
         }
 
         function stopRecording() {
@@ -989,10 +1140,11 @@
         window.addEventListener('load', () => {
             startBoardRendering();
             initCamera();
-
             if (speechSynthesis.onvoiceschanged !== undefined) {
                 speechSynthesis.onvoiceschanged = () => synth.getVoices();
             }
+            // Synchroniser la taille initiale
+            document.getElementById('camSizeVal').textContent = camSize;
         });
 
         window.addEventListener('beforeunload', () => {
