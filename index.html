@@ -400,7 +400,6 @@
         let isPaused = false;
         let isLooping = false;
 
-        // Durée fixe d'affichage par phrase (3 secondes)
         const DISPLAY_DURATION_MS = 3000;
 
         const boardCanvas = document.getElementById('boardCanvas');
@@ -419,14 +418,12 @@
         const RECORD_DURATION_MS = 300000;
         let recordTimer = null;
 
-        // Audio
         let audioCtx = null;
         let micStream = null;
         let micAnalyser = null;
         let micSource = null;
         let recordDestination = null;
 
-        // Timing
         let sentenceStartTime = 0;
         let sentenceDurationMs = DISPLAY_DURATION_MS;
         let stepTimer = null;
@@ -434,14 +431,12 @@
         let torchEnabled = false;
         let torchTrack = null;
 
-        // --- Personnalisation ---
         let boardColor = '#1e1e2e';
         let frameStyle = 'white';
         let cameraFilter = 'none';
         let camSize = 160;
         let faceBgColor = '#ffffff';
 
-        // --- Format ---
         let currentFormat = 'youtube';
         const FORMATS = {
             youtube: { width: 1280, height: 720,  label: 'YouTube 16:9' },
@@ -449,7 +444,6 @@
             short:   { width: 720,  height: 1280, label: 'Short 9:16'   }
         };
 
-        // --- Caméra ronde déplaçable ---
         let camX = 0;
         let camY = 0;
         let camRadius = 160;
@@ -461,7 +455,6 @@
         let resizeStartDist = 0;
         let resizeStartRadius = 0;
 
-        // --- Segmentation (fond virtuel) ---
         let selfieSegmentation = null;
         let segmentationReady = false;
         let segmentationLoopActive = false;
@@ -470,6 +463,12 @@
         compositeCanvas.height = 720;
         let compositeCtx = compositeCanvas.getContext('2d');
         let lastSegmentationResult = null;
+
+        // Réutilisable pour éviter les allocations par frame
+        const _bgTmp = document.createElement('canvas');
+        const _bgTmpCtx = _bgTmp.getContext('2d');
+        const _maskTmp = document.createElement('canvas');
+        const _maskTmpCtx = _maskTmp.getContext('2d');
 
         function setStatus(msg, type = '') {
             const el = document.getElementById('statusMsg');
@@ -536,7 +535,7 @@
             }
         }
 
-        // ==================== SEGMENTATION (fond virtuel) ====================
+        // ==================== SEGMENTATION ====================
         function initSegmentation() {
             if (typeof SelfieSegmentation === 'undefined') {
                 console.warn('MediaPipe SelfieSegmentation non chargé');
@@ -551,9 +550,7 @@
                     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
                 });
 
-                selfieSegmentation.setOptions({
-                    modelSelection: 1,
-                });
+                selfieSegmentation.setOptions({ modelSelection: 1 });
 
                 selfieSegmentation.onResults((results) => {
                     segmentationReady = true;
@@ -584,6 +581,7 @@
             loop();
         }
 
+        // ✅ Version corrigée : masque aligné avec le "cover" du canvas
         function getCameraWithBackground() {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -593,34 +591,47 @@
             }
 
             const results = lastSegmentationResult;
-
-            compositeCtx.save();
-            compositeCtx.fillStyle = faceBgColor;
-            compositeCtx.fillRect(0, 0, W, H);
-            compositeCtx.restore();
-
-            compositeCtx.save();
-
-            const tmp = document.createElement('canvas');
-            tmp.width = W;
-            tmp.height = H;
-            const tmpCtx = tmp.getContext('2d');
-
             const vW = videoElement.videoWidth || 640;
             const vH = videoElement.videoHeight || 480;
+
+            if (_bgTmp.width !== W || _bgTmp.height !== H) {
+                _bgTmp.width = W; _bgTmp.height = H;
+                _maskTmp.width = W; _maskTmp.height = H;
+            }
+
+            // Calcul "cover" identique pour la vidéo ET le masque
             const scale = Math.max(W / vW, H / vH);
             const dW = vW * scale;
             const dH = vH * scale;
             const dX = (W - dW) / 2;
             const dY = (H - dH) / 2;
-            tmpCtx.drawImage(videoElement, dX, dY, dW, dH);
 
-            const mask = results.segmentationMask;
-            tmpCtx.globalCompositeOperation = 'destination-in';
-            tmpCtx.drawImage(mask, 0, 0, W, H);
+            // 1) Vidéo cover
+            _bgTmpCtx.save();
+            _bgTmpCtx.clearRect(0, 0, W, H);
+            _bgTmpCtx.drawImage(videoElement, dX, dY, dW, dH);
 
-            compositeCtx.drawImage(tmp, 0, 0);
+            // 2) Masque cover (mêmes coordonnées)
+            _maskTmpCtx.save();
+            _maskTmpCtx.clearRect(0, 0, W, H);
+            _maskTmpCtx.drawImage(results.segmentationMask, dX, dY, dW, dH);
+            _maskTmpCtx.restore();
+
+            // 3) Intersection alpha
+            _bgTmpCtx.globalCompositeOperation = 'destination-in';
+            _bgTmpCtx.drawImage(_maskTmp, 0, 0);
+            _bgTmpCtx.globalCompositeOperation = 'source-over';
+            _bgTmpCtx.restore();
+
+            // 4) Composition sur la couleur de fond + miroir
+            compositeCtx.save();
+            compositeCtx.fillStyle = faceBgColor;
+            compositeCtx.fillRect(0, 0, W, H);
+            compositeCtx.translate(W, 0);
+            compositeCtx.scale(-1, 1);
+            compositeCtx.drawImage(_bgTmp, 0, 0);
             compositeCtx.restore();
+
             return compositeCanvas;
         }
 
@@ -1187,31 +1198,19 @@
             utterance.rate = 0.95;
             utterance.pitch = 1.0;
 
-            // Durée fixe de 3 secondes pour l'affichage
             sentenceDurationMs = DISPLAY_DURATION_MS;
             sentenceStartTime = Date.now();
 
-            // Gérer l'enchaînement avec un timer de 3 secondes exact
             clearStepTimer();
 
-            utterance.onend = () => {
-                // On ignore onend pour respecter exactement 3 secondes
-            };
-
-            utterance.onerror = (e) => {
-                console.warn('TTS:', e);
-                // Ne pas stopper : on garde le rythme de 3 secondes
-            };
+            utterance.onend = () => {};
+            utterance.onerror = (e) => { console.warn('TTS:', e); };
 
             synth.speak(utterance);
 
-            // Programmer le passage à la phrase suivante après 3 secondes
             stepTimer = setTimeout(() => {
                 if (!isPlaying) return;
-                if (isPaused) {
-                    // Si en pause, on attend la reprise via togglePause
-                    return;
-                }
+                if (isPaused) return;
                 repeatCounter++;
                 if (repeatCounter < currentItem.maxRepeats) {
                     speakStep();
@@ -1248,7 +1247,6 @@
                 isPaused = false;
                 document.getElementById('pauseBtn').innerText = "⏸ Pause";
                 if (synth.paused) synth.resume();
-                // Reprendre le timer avec le temps restant
                 const elapsed = Date.now() - sentenceStartTime;
                 const remaining = Math.max(50, DISPLAY_DURATION_MS - elapsed);
                 const currentItem = sentenceData[currentIndex];
@@ -1344,7 +1342,7 @@
             const mimeType = pickBestMimeType();
 
             try {
-                mediaRecorder = new MediaRecorder(combinedStream, { 
+                mediaRecorder = new MediaRecorder(combinedStream, {
                     mimeType, videoBitsPerSecond: 4000000, audioBitsPerSecond: 128000
                 });
             } catch (e) {
