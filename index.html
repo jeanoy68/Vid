@@ -92,7 +92,7 @@
         button:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.9; }
         button:disabled { opacity: 0.2; cursor: not-allowed; }
 
-        /* ===== Barre d'options (filtre, couleur, cadre, taille) ===== */
+        /* ===== Barre d'options ===== */
         .options-bar {
             width: 100%;
             max-width: 900px;
@@ -117,7 +117,7 @@
             gap: 6px;
         }
 
-        .options-bar select, .options-bar input[type="range"] {
+        .options-bar select, .options-bar input[type="range"], .options-bar input[type="color"] {
             border: 1px solid #ccc;
             border-radius: 6px;
             padding: 6px 10px;
@@ -128,16 +128,10 @@
             cursor: pointer;
         }
 
-        .options-bar input[type="range"] {
-            padding: 0;
-            width: 110px;
-        }
+        .options-bar input[type="range"] { padding: 0; width: 110px; }
+        .options-bar input[type="color"] { padding: 2px; width: 38px; height: 32px; }
 
-        .swatch-group {
-            display: flex;
-            gap: 6px;
-            align-items: center;
-        }
+        .swatch-group { display: flex; gap: 6px; align-items: center; }
 
         .swatch {
             width: 24px;
@@ -150,6 +144,28 @@
         .swatch:hover { transform: scale(1.15); }
         .swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent); }
 
+        /* Format toggle */
+        .format-toggle {
+            display: flex;
+            gap: 4px;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 3px;
+        }
+        .format-toggle button {
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: transparent;
+            color: #555;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .format-toggle button.active {
+            background: var(--accent);
+            color: white;
+        }
+
         .video-stage {
             width: 100%;
             max-width: 900px;
@@ -160,7 +176,10 @@
             margin-top: 5px;
             position: relative;
             background: #1e1e2e;
-            aspect-ratio: 16 / 9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: aspect-ratio 0.3s ease;
         }
 
         #boardCanvas {
@@ -242,6 +261,36 @@
             transition: opacity 0.3s;
             z-index: 5;
         }
+
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-weight: bold;
+            z-index: 10;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .loading-overlay.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -263,19 +312,26 @@
             <button id="recordBtn" onclick="toggleRecording()" disabled>⏺ Enregistrer</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
-        <div class="mute-note">🔇 TTS désactivé (muet) · Tableau + caméra ronde personnalisable</div>
+        <div class="mute-note">🔇 TTS désactivé (muet) · Fond virtuel blanc (colorisable) derrière le visage</div>
     </div>
 
     <!-- Barre d'options -->
     <div class="options-bar">
+        <label>📐 Format :
+            <div class="format-toggle" id="formatToggle">
+                <button data-format="youtube" class="active">▶️ YouTube 16:9</button>
+                <button data-format="tiktok">📱 TikTok 9:16</button>
+                <button data-format="short">🎬 Short 9:16</button>
+            </div>
+        </label>
+
         <label>🎨 Tableau :
             <div class="swatch-group" id="boardSwatches">
-                <div class="swatch" data-color="#1e1e2e" style="background:#1e1e2e" title="Ardoise sombre"></div>
+                <div class="swatch active" data-color="#1e1e2e" style="background:#1e1e2e" title="Ardoise sombre"></div>
                 <div class="swatch" data-color="#0d3b66" style="background:#0d3b66" title="Bleu nuit"></div>
                 <div class="swatch" data-color="#2d4a22" style="background:#2d4a22" title="Vert forêt"></div>
                 <div class="swatch" data-color="#4a1e2e" style="background:#4a1e2e" title="Bordeaux"></div>
                 <div class="swatch" data-color="#fdf6e3" style="background:#fdf6e3;border:1px solid #ccc" title="Crème clair"></div>
-                <div class="swatch active" data-color="#1e1e2e" style="background:#1e1e2e" title="Ardoise (défaut)"></div>
             </div>
         </label>
 
@@ -304,6 +360,18 @@
             </select>
         </label>
 
+        <label>🟩 Fond visage :
+            <input type="color" id="bgColorInput" value="#ffffff">
+            <div class="swatch-group" id="bgSwatches">
+                <div class="swatch active" data-color="#ffffff" style="background:#ffffff;border:1px solid #ccc" title="Blanc"></div>
+                <div class="swatch" data-color="#e0f7fa" style="background:#e0f7fa" title="Bleu clair"></div>
+                <div class="swatch" data-color="#fff3e0" style="background:#fff3e0" title="Crème"></div>
+                <div class="swatch" data-color="#e8f5e9" style="background:#e8f5e9" title="Vert menthe"></div>
+                <div class="swatch" data-color="#f3e5f5" style="background:#f3e5f5" title="Lavande"></div>
+                <div class="swatch" data-color="#ffebee" style="background:#ffebee" title="Rose"></div>
+            </div>
+        </label>
+
         <label>📏 Taille :
             <input type="range" id="camSize" min="80" max="360" value="160" step="10">
             <span id="camSizeVal" style="font-weight:700;color:var(--accent);min-width:38px;">160</span>
@@ -314,7 +382,13 @@
         <canvas id="boardCanvas" width="1280" height="720"></canvas>
         <video id="cameraVideo" autoplay playsinline muted></video>
         <div class="drag-hint" id="dragHint">✋ Glissez la caméra · ↕️ Molette pour redimensionner</div>
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="spinner"></div>
+            <div>Chargement du fond virtuel...</div>
+        </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
 
     <script>
         // ==================== ÉTAT GLOBAL ====================
@@ -329,6 +403,8 @@
         const boardCanvas = document.getElementById('boardCanvas');
         const boardCtx = boardCanvas.getContext('2d');
         const videoElement = document.getElementById('cameraVideo');
+        const videoStage = document.getElementById('videoStage');
+        const loadingOverlay = document.getElementById('loadingOverlay');
         let cameraStream = null;
         let cameraReady = false;
         let animationFrameId = null;
@@ -355,9 +431,18 @@
 
         // --- Personnalisation ---
         let boardColor = '#1e1e2e';
-        let frameStyle = 'white';   // none | white | glow | neon | gold | dashed
-        let cameraFilter = 'none';  // none | warm | cool | sepia | grayscale | vintage | vivid | soft | contrast
-        let camSize = 160;          // taille demandée (rayon de base en px canvas, ajusté au rendu)
+        let frameStyle = 'white';
+        let cameraFilter = 'none';
+        let camSize = 160;
+        let faceBgColor = '#ffffff'; // fond virtuel derrière le visage
+
+        // --- Format ---
+        let currentFormat = 'youtube';
+        const FORMATS = {
+            youtube: { width: 1280, height: 720,  label: 'YouTube 16:9' },
+            tiktok:  { width: 720,  height: 1280, label: 'TikTok 9:16'  },
+            short:   { width: 720,  height: 1280, label: 'Short 9:16'   }
+        };
 
         // --- Caméra ronde déplaçable ---
         let camX = 0;
@@ -371,12 +456,72 @@
         let resizeStartDist = 0;
         let resizeStartRadius = 0;
 
+        // --- Segmentation (fond virtuel) ---
+        let selfieSegmentation = null;
+        let segmentationReady = false;
+        let segmentationFrame = document.createElement('canvas');
+        segmentationFrame.width = 1280;
+        segmentationFrame.height = 720;
+        let segFrameCtx = segmentationFrame.getContext('2d');
+        // Canvas intermédiaire pour composer le fond coloré
+        let compositeCanvas = document.createElement('canvas');
+        compositeCanvas.width = 1280;
+        compositeCanvas.height = 720;
+        let compositeCtx = compositeCanvas.getContext('2d');
+        let lastSegmentationResult = null;
+
         function setStatus(msg, type = '') {
             const el = document.getElementById('statusMsg');
             el.textContent = msg;
             el.className = 'status-msg' + (type ? ' ' + type : '');
             console.log('[STATUS]', msg);
         }
+
+        // ==================== FORMAT ====================
+        function applyFormat(format) {
+            currentFormat = format;
+            const cfg = FORMATS[format];
+
+            boardCanvas.width = cfg.width;
+            boardCanvas.height = cfg.height;
+
+            segmentationFrame.width = cfg.width;
+            segmentationFrame.height = cfg.height;
+            compositeCanvas.width = cfg.width;
+            compositeCanvas.height = cfg.height;
+
+            videoStage.style.aspectRatio = `${cfg.width} / ${cfg.height}`;
+
+            const base = Math.min(cfg.width, cfg.height);
+            if (!hasDraggedOnce) {
+                camRadius = Math.round(base * 0.18);
+                camX = cfg.width - camRadius - 40;
+                camY = cfg.height - camRadius - 40;
+            } else {
+                camRadius = Math.min(camRadius, Math.round(base * 0.45));
+                camX = Math.max(camRadius, Math.min(cfg.width - camRadius, camX));
+                camY = Math.max(camRadius, Math.min(cfg.height - camRadius, camY));
+            }
+
+            camSize = Math.round(camRadius);
+            const slider = document.getElementById('camSize');
+            slider.max = Math.round(base * 0.45);
+            slider.value = Math.min(slider.max, Math.max(slider.min, camSize));
+            document.getElementById('camSizeVal').textContent = slider.value;
+
+            document.querySelectorAll('#formatToggle button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.format === format);
+            });
+
+            setStatus(`📐 Format : ${cfg.label} (${cfg.width}×${cfg.height})`, 'info');
+        }
+
+        document.querySelectorAll('#formatToggle button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const fmt = btn.dataset.format;
+                if (fmt !== currentFormat) applyFormat(fmt);
+            });
+        });
 
         // ==================== FILTRES CANVAS ====================
         function getFilterString() {
@@ -391,6 +536,111 @@
                 case 'contrast':  return 'contrast(1.35) saturate(1.2)';
                 default:          return 'none';
             }
+        }
+
+        // ==================== SEGMENTATION (fond virtuel) ====================
+        function initSegmentation() {
+            if (typeof SelfieSegmentation === 'undefined') {
+                console.warn('MediaPipe SelfieSegmentation non chargé');
+                setStatus('⚠️ Fond virtuel indisponible (librairie non chargée)', 'warn');
+                return;
+            }
+
+            loadingOverlay.classList.add('visible');
+
+            try {
+                selfieSegmentation = new SelfieSegmentation({
+                    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+                });
+
+                selfieSegmentation.setOptions({
+                    modelSelection: 1, // 1 = paysage (plus rapide), 0 = général (plus précis)
+                });
+
+                selfieSegmentation.onResults((results) => {
+                    segmentationReady = true;
+                    lastSegmentationResult = results;
+                    loadingOverlay.classList.remove('visible');
+                });
+
+                // Démarrer la boucle d'envoi de frames à MediaPipe
+                startSegmentationLoop();
+                setStatus('✅ Fond virtuel prêt', 'success');
+            } catch (e) {
+                console.error('Erreur init segmentation:', e);
+                setStatus('⚠️ Impossible d\'initialiser le fond virtuel', 'warn');
+                loadingOverlay.classList.remove('visible');
+            }
+        }
+
+        let segmentationLoopActive = false;
+        async function startSegmentationLoop() {
+            if (segmentationLoopActive) return;
+            segmentationLoopActive = true;
+            const loop = async () => {
+                if (selfieSegmentation && cameraReady && videoElement.readyState >= 2) {
+                    try {
+                        await selfieSegmentation.send({ image: videoElement });
+                    } catch (e) {
+                        // Ignorer les erreurs transitoires
+                    }
+                }
+                if (segmentationLoopActive) {
+                    requestAnimationFrame(loop);
+                }
+            };
+            loop();
+        }
+
+        // Compose l'image de la caméra avec le fond coloré (utilise le dernier masque)
+        function getCameraWithBackground() {
+            const W = boardCanvas.width;
+            const H = boardCanvas.height;
+
+            if (!lastSegmentationResult || !lastSegmentationResult.segmentationMask) {
+                // Pas encore de masque : on renvoie la vidéo brute
+                return videoElement;
+            }
+
+            const results = lastSegmentationResult;
+
+            // 1) Dessiner le fond coloré sur le composite
+            compositeCtx.save();
+            compositeCtx.fillStyle = faceBgColor;
+            compositeCtx.fillRect(0, 0, W, H);
+            compositeCtx.restore();
+
+            // 2) Dessiner la personne (masque) sur un canvas temporaire
+            //    On utilise le mask pour ne garder que la personne
+            compositeCtx.save();
+            compositeCtx.globalCompositeOperation = 'source-over';
+
+            // Créer un canvas temporaire pour la personne découpée
+            const tmp = document.createElement('canvas');
+            tmp.width = W;
+            tmp.height = H;
+            const tmpCtx = tmp.getContext('2d');
+
+            // Dessiner la vidéo redimensionnée (cover)
+            const vW = videoElement.videoWidth || 640;
+            const vH = videoElement.videoHeight || 480;
+            const scale = Math.max(W / vW, H / vH);
+            const dW = vW * scale;
+            const dH = vH * scale;
+            const dX = (W - dW) / 2;
+            const dY = (H - dH) / 2;
+            tmpCtx.drawImage(videoElement, dX, dY, dW, dH);
+
+            // Appliquer le masque : garder seulement les pixels où mask > seuil
+            const mask = results.segmentationMask;
+            tmpCtx.globalCompositeOperation = 'destination-in';
+            tmpCtx.drawImage(mask, 0, 0, W, H);
+
+            // 3) Dessiner la personne découpée par-dessus le fond coloré
+            compositeCtx.drawImage(tmp, 0, 0);
+
+            compositeCtx.restore();
+            return compositeCanvas;
         }
 
         // ==================== INIT CAMÉRA ====================
@@ -427,10 +677,11 @@
                 await videoElement.play();
                 cameraReady = true;
                 banner.classList.remove('visible');
-                setStatus('✅ Caméra active · table + caméra personnalisables', 'success');
+                setStatus('✅ Caméra active · fond virtuel en chargement...', 'success');
 
                 setupTorch();
                 startBoardRendering();
+                initSegmentation();
             } catch (err) {
                 let msg = '❌ ';
                 switch (err.name) {
@@ -495,7 +746,6 @@
             return (dx * dx + dy * dy) <= (camRadius * camRadius);
         }
 
-        // Détecte si on est proche du bord (pour redimensionner)
         function isNearEdge(pos) {
             if (!cameraReady) return false;
             const dx = pos.x - camX;
@@ -508,7 +758,6 @@
             const pos = getCanvasCoords(evt);
             if (isInsideCamera(pos)) {
                 if (isNearEdge(pos) && evt.touches && evt.touches.length === 2) {
-                    // Redimensionnement à deux doigts
                     const t1 = evt.touches[0];
                     const t2 = evt.touches[1];
                     resizeStartDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
@@ -572,7 +821,6 @@
             }
         }
 
-        // Molette pour redimensionner quand la souris est sur la caméra
         boardCanvas.addEventListener('wheel', (evt) => {
             const pos = getCanvasCoords(evt);
             if (isInsideCamera(pos)) {
@@ -595,7 +843,6 @@
         window.addEventListener('touchend', onPointerUp, { passive: false });
 
         // ==================== OPTIONS UI ====================
-        // Couleur du tableau
         document.querySelectorAll('#boardSwatches .swatch').forEach(sw => {
             sw.addEventListener('click', () => {
                 document.querySelectorAll('#boardSwatches .swatch').forEach(s => s.classList.remove('active'));
@@ -605,19 +852,34 @@
             });
         });
 
-        // Cadre
         document.getElementById('frameSelect').addEventListener('change', (e) => {
             frameStyle = e.target.value;
             setStatus('🖼️ Cadre : ' + e.target.options[e.target.selectedIndex].text, 'info');
         });
 
-        // Filtre caméra
         document.getElementById('filterSelect').addEventListener('change', (e) => {
             cameraFilter = e.target.value;
             setStatus('✨ Filtre caméra : ' + e.target.options[e.target.selectedIndex].text, 'info');
         });
 
-        // Taille caméra (slider)
+        // Fond du visage : color picker
+        const bgColorInput = document.getElementById('bgColorInput');
+        bgColorInput.addEventListener('input', (e) => {
+            faceBgColor = e.target.value;
+            document.querySelectorAll('#bgSwatches .swatch').forEach(s => s.classList.remove('active'));
+        });
+
+        // Fond du visage : swatches
+        document.querySelectorAll('#bgSwatches .swatch').forEach(sw => {
+            sw.addEventListener('click', () => {
+                document.querySelectorAll('#bgSwatches .swatch').forEach(s => s.classList.remove('active'));
+                sw.classList.add('active');
+                faceBgColor = sw.dataset.color;
+                bgColorInput.value = faceBgColor;
+                setStatus('🟩 Fond du visage changé', 'info');
+            });
+        });
+
         const camSizeSlider = document.getElementById('camSize');
         const camSizeVal = document.getElementById('camSizeVal');
         camSizeSlider.addEventListener('input', (e) => {
@@ -630,14 +892,11 @@
         function drawBoardBackground() {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
+            const isLight = isLightColor(boardColor);
 
             boardCtx.fillStyle = boardColor;
             boardCtx.fillRect(0, 0, W, H);
 
-            // Détecter si le fond est clair pour ajuster les lignes
-            const isLight = isLightColor(boardColor);
-
-            // Lignes
             boardCtx.strokeStyle = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)';
             boardCtx.lineWidth = 1;
             for (let y = 100; y < H; y += 60) {
@@ -646,8 +905,7 @@
                 boardCtx.lineTo(W - 40, y);
                 boardCtx.stroke();
             }
-            // Marge
-            boardCtx.strokeStyle = isLight ? 'rgba(217,83,79,0.25)' : 'rgba(217,83,79,0.25)';
+            boardCtx.strokeStyle = 'rgba(217,83,79,0.25)';
             boardCtx.lineWidth = 2;
             boardCtx.beginPath();
             boardCtx.moveTo(80, 40);
@@ -668,9 +926,10 @@
             const W = boardCanvas.width;
             const H = boardCanvas.height;
             const isLight = isLightColor(boardColor);
+            const isPortrait = H > W;
 
             if (!item) {
-                boardCtx.font = 'bold 36px "Segoe UI", sans-serif';
+                boardCtx.font = `bold ${isPortrait ? 28 : 36}px "Segoe UI", sans-serif`;
                 boardCtx.textAlign = 'center';
                 boardCtx.textBaseline = 'middle';
                 boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)';
@@ -682,31 +941,31 @@
             const badgeColor = item.isEnglish ? '#d9534f' : '#0275d8';
             const badgeText = item.isEnglish ? 'EN' : 'FR';
 
-            // Badge
-            boardCtx.font = 'bold 20px "Segoe UI", sans-serif';
-            const badgeWidth = boardCtx.measureText(badgeText).width + 36;
+            const badgeSize = isPortrait ? 36 : 44;
+            boardCtx.font = `bold ${isPortrait ? 16 : 20}px "Segoe UI", sans-serif`;
+            const badgeWidth = boardCtx.measureText(badgeText).width + (isPortrait ? 28 : 36);
             boardCtx.fillStyle = badgeColor;
-            drawRoundRect(boardCtx, 40, 40, badgeWidth, 44, 22);
+            drawRoundRect(boardCtx, 30, 30, badgeWidth, badgeSize, badgeSize / 2);
             boardCtx.fill();
             boardCtx.fillStyle = '#fff';
             boardCtx.textAlign = 'center';
             boardCtx.textBaseline = 'middle';
-            boardCtx.fillText(badgeText, 40 + badgeWidth / 2, 63);
+            boardCtx.fillText(badgeText, 30 + badgeWidth / 2, 30 + badgeSize / 2);
 
-            // Progression
             if (total > 0) {
-                boardCtx.font = '16px "Segoe UI", sans-serif';
+                boardCtx.font = `16px "Segoe UI", sans-serif`;
                 boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)';
                 boardCtx.textAlign = 'right';
-                boardCtx.fillText(`${index + 1} / ${total}`, W - 40, 63);
+                boardCtx.fillText(`${index + 1} / ${total}`, W - 30, 50);
             }
 
-            // Texte principal
-            boardCtx.font = 'bold 64px "Segoe UI", sans-serif';
+            const baseFontSize = isPortrait ? 48 : 64;
+            const maxWidth = isPortrait ? W - 120 : W - 260;
+
+            boardCtx.font = `bold ${baseFontSize}px "Segoe UI", sans-serif`;
             boardCtx.textAlign = 'center';
             boardCtx.textBaseline = 'middle';
 
-            const maxWidth = W - 260;
             const words = item.text.split(' ');
             const lines = [];
             let currentLine = '';
@@ -719,28 +978,28 @@
             });
             lines.push(currentLine);
 
-            const lineHeight = 82;
+            const lineHeight = baseFontSize * 1.25;
             const totalHeight = lines.length * lineHeight;
-            const startY = (H / 2) - (totalHeight / 2) + 10;
+            const centerY = isPortrait ? H * 0.42 : H / 2;
+            const startY = centerY - (totalHeight / 2) + lineHeight / 2;
+
             lines.forEach((line, i) => {
                 boardCtx.fillStyle = textColor;
                 boardCtx.fillText(line, W / 2, startY + (i * lineHeight));
             });
 
-            // Répétition
             if (isPlaying && item.maxRepeats > 1) {
-                boardCtx.font = '20px "Segoe UI", sans-serif';
+                boardCtx.font = `18px "Segoe UI", sans-serif`;
                 boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.55)';
                 boardCtx.textAlign = 'center';
-                boardCtx.fillText(`Répétition ${repeatCounter + 1} / ${item.maxRepeats}`, W / 2, H - 80);
+                boardCtx.fillText(`Répétition ${repeatCounter + 1} / ${item.maxRepeats}`, W / 2, H - 100);
             }
 
-            // Progression
             if (isPlaying) {
                 const progress = (index + (repeatCounter / (item.maxRepeats || 1))) / Math.max(1, total);
-                const barWidth = W * 0.5;
+                const barWidth = W * 0.6;
                 const barX = (W - barWidth) / 2;
-                const barY = H - 45;
+                const barY = H - 50;
                 boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
                 drawRoundRect(boardCtx, barX, barY, barWidth, 8, 4);
                 boardCtx.fill();
@@ -750,7 +1009,6 @@
             }
         }
 
-        // Dessine le cadre autour de la caméra selon le style
         function drawCameraFrame(radius) {
             boardCtx.save();
             switch (frameStyle) {
@@ -816,11 +1074,7 @@
         function drawCameraCircle() {
             if (!cameraReady || videoElement.readyState < 2) return;
 
-            // Adapter le rayon à la taille du canvas (base 1280px de large)
-            const baseRadius = camRadius; // en px du canvas
-            const radius = baseRadius;
-
-            // Position par défaut
+            const radius = camRadius;
             if (camX === 0 && camY === 0) {
                 camX = boardCanvas.width - radius - 50;
                 camY = boardCanvas.height - radius - 50;
@@ -834,31 +1088,32 @@
             boardCtx.fill();
             boardCtx.restore();
 
-            // Clip + vidéo avec filtre
+            // Clip + image caméra avec fond virtuel
             boardCtx.save();
             boardCtx.beginPath();
             boardCtx.arc(camX, camY, radius, 0, Math.PI * 2);
             boardCtx.closePath();
             boardCtx.clip();
 
-            const videoW = videoElement.videoWidth || 640;
-            const videoH = videoElement.videoHeight || 480;
+            // Fond virtuel coloré + personne découpée
+            const sourceCanvas = getCameraWithBackground();
             const diameter = radius * 2;
-            const scale = Math.max(diameter / videoW, diameter / videoH);
-            const drawW = videoW * scale;
-            const drawH = videoH * scale;
+            const srcW = sourceCanvas.width || boardCanvas.width;
+            const srcH = sourceCanvas.height || boardCanvas.height;
+            const scale = Math.max(diameter / srcW, diameter / srcH);
+            const drawW = srcW * scale;
+            const drawH = srcH * scale;
             const offsetX = camX - drawW / 2;
             const offsetY = camY - drawH / 2;
 
             boardCtx.filter = getFilterString();
-            boardCtx.drawImage(videoElement, offsetX, offsetY, drawW, drawH);
+            boardCtx.drawImage(sourceCanvas, offsetX, offsetY, drawW, drawH);
             boardCtx.filter = 'none';
             boardCtx.restore();
 
-            // Cadre
             drawCameraFrame(radius);
 
-            // Poignée visuelle (petit point pour indiquer la zone de redimensionnement)
+            // Poignée visuelle
             boardCtx.beginPath();
             boardCtx.arc(camX, camY + radius - 4, 5, 0, Math.PI * 2);
             boardCtx.fillStyle = 'rgba(255,255,255,0.85)';
@@ -951,7 +1206,7 @@
             const voices = synth.getVoices();
             const voice = voices.find(v => v.lang.startsWith(currentItem.lang));
             if (voice) utterance.voice = voice;
-            utterance.volume = 0.0; // muet
+            utterance.volume = 0.0;
             utterance.rate = 0.95;
             utterance.pitch = 1.0;
             sentenceDurationMs = estimateDuration(currentItem.text, currentItem.isEnglish);
@@ -1104,7 +1359,8 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `apprentissage-bilingue-${Date.now()}.${ext}`;
+                const fmtLabel = FORMATS[currentFormat].label.replace(/\s+/g, '-').toLowerCase();
+                a.download = `apprentissage-${fmtLabel}-${Date.now()}.${ext}`;
                 document.body.appendChild(a); a.click(); document.body.removeChild(a);
                 setTimeout(() => URL.revokeObjectURL(url), 10000);
                 setStatus(`✅ Vidéo téléchargée (${ext.toUpperCase()}, ${(blob.size/1024/1024).toFixed(1)} Mo)`, 'success');
@@ -1122,7 +1378,7 @@
             isRecording = true;
             const btn = document.getElementById('recordBtn');
             btn.classList.add('recording'); btn.innerText = '⏹ Arrêter';
-            setStatus(`⏺ Enregistrement (tableau + caméra ronde, TTS muet)...`, 'success');
+            setStatus(`⏺ Enregistrement (${FORMATS[currentFormat].label})...`, 'success');
             if (!isPlaying) startPlayAll();
             recordTimer = setTimeout(() => { if (isRecording) stopRecording(); }, RECORD_DURATION_MS);
         }
@@ -1138,12 +1394,12 @@
 
         // ==================== INIT ====================
         window.addEventListener('load', () => {
+            applyFormat('youtube');
             startBoardRendering();
             initCamera();
             if (speechSynthesis.onvoiceschanged !== undefined) {
                 speechSynthesis.onvoiceschanged = () => synth.getVoices();
             }
-            // Synchroniser la taille initiale
             document.getElementById('camSizeVal').textContent = camSize;
         });
 
@@ -1151,6 +1407,7 @@
             if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
             if (micStream) micStream.getTracks().forEach(t => t.stop());
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            segmentationLoopActive = false;
         });
     </script>
 </body>
