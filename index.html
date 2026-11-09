@@ -3,109 +3,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apprentissage Bilingue · Tableau + Caméra Ronde</title>
+    <title>Apprentissage Bilingue · Simple</title>
     <style>
         :root {
-            --en-red: #d9534f;
-            --fr-blue: #0275d8;
-            --border-color: #eeeeee;
-            --success-green: #28a745;
             --accent: #6c5ce7;
+            --success: #28a745;
+            --danger: #d9534f;
+            --info: #0275d8;
+            --warn: #e67e22;
         }
 
         * { box-sizing: border-box; }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #ffffff;
+            background: #f5f6fa;
             color: #333;
             display: flex;
             flex-direction: column;
             align-items: center;
             margin: 0;
-            padding: 20px;
+            padding: 16px;
+            min-height: 100vh;
         }
 
-        .input-section {
+        h1 {
+            font-size: 20px;
+            margin: 0 0 14px;
+            color: #2d3436;
+        }
+
+        .card {
             width: 100%;
             max-width: 900px;
-            margin-bottom: 20px;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+            padding: 16px;
+            margin-bottom: 14px;
         }
 
         textarea {
             width: 100%;
-            height: 100px;
+            height: 90px;
             background: #fafafa;
-            color: #333;
-            border: 1px solid #ddd;
-            padding: 15px;
-            border-radius: 12px;
-            font-size: 16px;
-            resize: none;
+            border: 2px solid #e0e0e0;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 15px;
+            resize: vertical;
             outline: none;
             font-family: inherit;
+            transition: border-color 0.2s;
         }
+        textarea:focus { border-color: var(--accent); }
 
         .controls {
-            margin-top: 15px;
+            margin-top: 12px;
             display: flex;
-            gap: 10px;
+            gap: 8px;
             justify-content: center;
             flex-wrap: wrap;
         }
 
         button {
-            padding: 12px 20px;
-            border-radius: 8px;
+            padding: 11px 18px;
+            border-radius: 10px;
             border: none;
             cursor: pointer;
             font-weight: bold;
             font-size: 14px;
-            transition: all 0.2s;
+            transition: transform 0.15s, opacity 0.15s;
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 6px;
         }
 
-        #loadBtn { background: #f0f0f0; color: #555; }
-        #playBtn { background: #ff0000; color: white; }
-        #pauseBtn { background: #f0ad4e; color: white; display: none; }
-        #stopBtn { background: #333; color: white; }
-        #loopBtn { background: #f0f0f0; color: #555; border: 2px solid transparent; }
-        #torchBtn { background: #f0f0f0; color: #555; border: 2px solid transparent; }
-        #torchBtn.active { background: #f1c40f; color: #333; border-color: #d4ac0d; }
-        #recordBtn { background: #6c5ce7; color: white; }
+        button:hover:not(:disabled) { transform: translateY(-1px); }
+        button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-play { background: #e74c3c; color: white; }
+        .btn-light { background: #ecf0f1; color: #555; }
+        .btn-dark { background: #2d3436; color: white; }
+        .btn-active { background: var(--success); color: white; }
+
+        #pauseBtn { display: none; }
+        #torchBtn.active { background: #f1c40f; color: #333; }
         #recordBtn.recording { background: #e17055; animation: pulse 1.2s infinite; }
 
         @keyframes pulse {
-            0% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.8; transform: scale(1.02); }
-            100% { opacity: 1; transform: scale(1); }
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.75; }
         }
 
-        #loopBtn.active {
-            background: var(--success-green);
-            color: white;
-            border-color: #1e7e34;
+        .status-msg {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #666;
+            text-align: center;
+            min-height: 20px;
         }
+        .status-msg.success { color: var(--success); font-weight: 600; }
+        .status-msg.error { color: var(--danger); font-weight: 600; }
+        .status-msg.info { color: var(--info); }
+        .status-msg.warn { color: var(--warn); font-weight: 600; }
 
-        button:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.9; }
-        button:disabled { opacity: 0.2; cursor: not-allowed; }
-
-        /* ===== Barre d'options ===== */
+        /* Barre d'options simplifiée */
         .options-bar {
             width: 100%;
             max-width: 900px;
             display: flex;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 10px;
             align-items: center;
             justify-content: center;
-            margin-bottom: 15px;
-            padding: 12px 16px;
-            background: #f8f9ff;
-            border: 1px solid #e6e9ff;
+            margin-bottom: 14px;
+            padding: 12px;
+            background: #fff;
             border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
             font-size: 13px;
         }
 
@@ -120,41 +137,24 @@
         .options-bar select, .options-bar input[type="range"], .options-bar input[type="color"] {
             border: 1px solid #ccc;
             border-radius: 6px;
-            padding: 6px 10px;
+            padding: 6px 8px;
             background: white;
             font-family: inherit;
             font-size: 13px;
-            color: #333;
             cursor: pointer;
         }
+        .options-bar input[type="range"] { padding: 0; width: 100px; }
+        .options-bar input[type="color"] { padding: 2px; width: 36px; height: 30px; }
 
-        .options-bar input[type="range"] { padding: 0; width: 110px; }
-        .options-bar input[type="color"] { padding: 2px; width: 38px; height: 32px; }
-
-        .swatch-group { display: flex; gap: 6px; align-items: center; }
-
-        .swatch {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            cursor: pointer;
-            border: 2px solid transparent;
-            transition: transform 0.15s, border-color 0.15s;
-        }
-        .swatch:hover { transform: scale(1.15); }
-        .swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent); }
-
-        /* Format toggle */
         .format-toggle {
             display: flex;
-            gap: 4px;
-            background: #fff;
-            border: 1px solid #ccc;
+            gap: 3px;
+            background: #f0f0f0;
             border-radius: 8px;
             padding: 3px;
         }
         .format-toggle button {
-            padding: 6px 12px;
+            padding: 5px 10px;
             border-radius: 6px;
             background: transparent;
             color: #555;
@@ -171,15 +171,12 @@
             max-width: 900px;
             border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-            border: 1px solid var(--border-color);
-            margin-top: 5px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
             position: relative;
-            background: #1e1e2e;
+            background: #000;
             display: flex;
             justify-content: center;
             align-items: center;
-            transition: aspect-ratio 0.3s ease;
         }
 
         #boardCanvas {
@@ -197,53 +194,6 @@
             height: 1px;
             opacity: 0;
             pointer-events: none;
-            top: 0;
-            left: 0;
-        }
-
-        .status-msg {
-            margin-top: 12px;
-            font-size: 14px;
-            color: #666;
-            text-align: center;
-            min-height: 22px;
-            padding: 0 15px;
-            line-height: 1.4;
-        }
-
-        .status-msg.success { color: var(--success-green); font-weight: bold; }
-        .status-msg.error { color: var(--en-red); font-weight: bold; }
-        .status-msg.info { color: #0275d8; }
-        .status-msg.warn { color: #e67e22; font-weight: bold; }
-
-        .help-banner {
-            width: 100%;
-            max-width: 900px;
-            background: #fff8e1;
-            border: 1px solid #ffe0b2;
-            border-radius: 10px;
-            padding: 12px 16px;
-            font-size: 13px;
-            color: #7a5c00;
-            margin-bottom: 15px;
-            display: none;
-        }
-        .help-banner.visible { display: block; }
-        .help-banner code {
-            background: #fff3cd;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: monospace;
-        }
-
-        .mute-note {
-            width: 100%;
-            max-width: 900px;
-            font-size: 13px;
-            color: #888;
-            text-align: center;
-            margin-top: 5px;
-            font-style: italic;
         }
 
         .drag-hint {
@@ -257,15 +207,13 @@
             padding: 5px 12px;
             border-radius: 20px;
             pointer-events: none;
-            opacity: 0.85;
-            transition: opacity 0.3s;
             z-index: 5;
         }
 
         .loading-overlay {
             position: absolute;
             inset: 0;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.75);
             color: white;
             display: flex;
             flex-direction: column;
@@ -278,81 +226,95 @@
             pointer-events: none;
             transition: opacity 0.3s;
         }
-        .loading-overlay.visible {
-            opacity: 1;
-            pointer-events: all;
-        }
+        .loading-overlay.visible { opacity: 1; pointer-events: all; }
+
         .spinner {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             border: 4px solid rgba(255,255,255,0.3);
             border-top-color: white;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        .help-banner {
+            width: 100%;
+            max-width: 900px;
+            background: #fff8e1;
+            border: 1px solid #ffe0b2;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 12px;
+            color: #7a5c00;
+            margin-bottom: 12px;
+            display: none;
+        }
+        .help-banner.visible { display: block; }
+        .help-banner code {
+            background: #fff3cd;
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        @media (max-width: 600px) {
+            .options-bar { font-size: 12px; }
+            button { padding: 10px 14px; font-size: 13px; }
+        }
     </style>
 </head>
 <body>
 
+    <h1>🎓 Apprentissage Bilingue</h1>
+
     <div id="helpBanner" class="help-banner">
-        ⚠️ <strong>La caméra ne fonctionne pas ?</strong> Ouvrez cette page via un serveur local.
-        Exemple : <code>python -m http.server 8000</code> puis <code>http://localhost:8000</code>
+        ⚠️ Caméra bloquée ? Ouvrez via <code>http://localhost</code> (ex: <code>python -m http.server 8000</code>)
     </div>
 
-    <div class="input-section">
-        <textarea id="textInput" placeholder="Ligne 1 : Anglais&#10;Ligne 2 : Français&#10;Ligne 3 : Anglais..."></textarea>
+    <!-- 1. Texte -->
+    <div class="card">
+        <textarea id="textInput" placeholder="Collez votre texte ici — une ligne sur deux sera en anglais, l'autre en français.&#10;Exemple :&#10;Hello, how are you?&#10;Bonjour, comment vas-tu ?"></textarea>
         <div class="controls">
-            <button id="loadBtn" onclick="processText()">1. Charger la liste</button>
-            <button id="playBtn" onclick="startPlayAll()" disabled>▶ Lire tout</button>
-            <button id="pauseBtn" onclick="togglePause()">⏸ Pause</button>
-            <button id="stopBtn" onclick="stopSpeech()">⏹ Arrêter</button>
-            <button id="loopBtn" onclick="toggleLoop()">🔁 Boucle : OFF</button>
-            <button id="torchBtn" onclick="toggleTorch()" disabled>🔦 Flash : OFF</button>
-            <button id="recordBtn" onclick="toggleRecording()" disabled>⏺ Enregistrer</button>
+            <button id="loadBtn" class="btn-primary" onclick="processText()">📥 Charger</button>
+            <button id="playBtn" class="btn-play" onclick="startPlayAll()" disabled>▶ Lire</button>
+            <button id="pauseBtn" class="btn-light" onclick="togglePause()">⏸ Pause</button>
+            <button id="stopBtn" class="btn-dark" onclick="stopSpeech()">⏹ Stop</button>
+            <button id="loopBtn" class="btn-light" onclick="toggleLoop()">🔁 Boucle</button>
+            <button id="torchBtn" class="btn-light" onclick="toggleTorch()" disabled>🔦 Flash</button>
+            <button id="recordBtn" class="btn-primary" onclick="toggleRecording()" disabled>⏺ Enregistrer</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
-        <div class="mute-note">🔇 TTS désactivé · Chaque phrase s'affiche 3 secondes · Fond virtuel colorisable</div>
     </div>
 
-    <!-- Barre d'options -->
+    <!-- 2. Options -->
     <div class="options-bar">
         <label>📐 Format :
             <div class="format-toggle" id="formatToggle">
-                <button data-format="youtube" class="active">▶️ YouTube 16:9</button>
-                <button data-format="tiktok">📱 TikTok 9:16</button>
-                <button data-format="short">🎬 Short 9:16</button>
-            </div>
-        </label>
-
-        <label>🎨 Tableau :
-            <div class="swatch-group" id="boardSwatches">
-                <div class="swatch active" data-color="#1e1e2e" style="background:#1e1e2e" title="Ardoise sombre"></div>
-                <div class="swatch" data-color="#0d3b66" style="background:#0d3b66" title="Bleu nuit"></div>
-                <div class="swatch" data-color="#2d4a22" style="background:#2d4a22" title="Vert forêt"></div>
-                <div class="swatch" data-color="#4a1e2e" style="background:#4a1e2e" title="Bordeaux"></div>
-                <div class="swatch" data-color="#fdf6e3" style="background:#fdf6e3;border:1px solid #ccc" title="Crème clair"></div>
+                <button data-format="youtube" class="active">YouTube</button>
+                <button data-format="tiktok">TikTok</button>
+                <button data-format="short">Short</button>
             </div>
         </label>
 
         <label>🖼️ Cadre :
             <select id="frameSelect">
-                <option value="none">Aucun</option>
-                <option value="white" selected>Blanc épais</option>
-                <option value="glow">Halo lumineux</option>
+                <option value="white" selected>Blanc</option>
+                <option value="glow">Halo</option>
                 <option value="neon">Néon</option>
                 <option value="gold">Or</option>
                 <option value="dashed">Pointillé</option>
+                <option value="none">Aucun</option>
             </select>
         </label>
 
-        <label>✨ Filtre caméra :
+        <label>✨ Filtre :
             <select id="filterSelect">
                 <option value="none">Aucun</option>
                 <option value="warm">Chaleureux</option>
                 <option value="cool">Froid</option>
                 <option value="sepia">Sépia</option>
-                <option value="grayscale">Noir & blanc</option>
+                <option value="grayscale">N&B</option>
                 <option value="vintage">Vintage</option>
                 <option value="vivid">Vif</option>
                 <option value="soft">Doux</option>
@@ -361,23 +323,16 @@
         </label>
 
         <label>🟩 Fond visage :
-            <input type="color" id="bgColorInput" value="#ffffff">
-            <div class="swatch-group" id="bgSwatches">
-                <div class="swatch active" data-color="#ffffff" style="background:#ffffff;border:1px solid #ccc" title="Blanc"></div>
-                <div class="swatch" data-color="#e0f7fa" style="background:#e0f7fa" title="Bleu clair"></div>
-                <div class="swatch" data-color="#fff3e0" style="background:#fff3e0" title="Crème"></div>
-                <div class="swatch" data-color="#e8f5e9" style="background:#e8f5e9" title="Vert menthe"></div>
-                <div class="swatch" data-color="#f3e5f5" style="background:#f3e5f5" title="Lavande"></div>
-                <div class="swatch" data-color="#ffebee" style="background:#ffebee" title="Rose"></div>
-            </div>
+            <input type="color" id="bgColorInput" value="#000000">
         </label>
 
         <label>📏 Taille :
             <input type="range" id="camSize" min="80" max="360" value="160" step="10">
-            <span id="camSizeVal" style="font-weight:700;color:var(--accent);min-width:38px;">160</span>
+            <span id="camSizeVal" style="font-weight:700;color:var(--accent);min-width:34px;">160</span>
         </label>
     </div>
 
+    <!-- 3. Scène -->
     <div class="video-stage" id="videoStage">
         <canvas id="boardCanvas" width="1280" height="720"></canvas>
         <video id="cameraVideo" autoplay playsinline muted></video>
@@ -400,7 +355,6 @@
         let isPaused = false;
         let isLooping = false;
 
-        // Durée fixe d'affichage par phrase (3 secondes)
         const DISPLAY_DURATION_MS = 3000;
 
         const boardCanvas = document.getElementById('boardCanvas');
@@ -408,6 +362,7 @@
         const videoElement = document.getElementById('cameraVideo');
         const videoStage = document.getElementById('videoStage');
         const loadingOverlay = document.getElementById('loadingOverlay');
+
         let cameraStream = null;
         let cameraReady = false;
         let animationFrameId = null;
@@ -422,26 +377,23 @@
         // Audio
         let audioCtx = null;
         let micStream = null;
-        let micAnalyser = null;
-        let micSource = null;
         let recordDestination = null;
 
         // Timing
         let sentenceStartTime = 0;
-        let sentenceDurationMs = DISPLAY_DURATION_MS;
         let stepTimer = null;
 
         let torchEnabled = false;
         let torchTrack = null;
 
-        // --- Personnalisation ---
+        // Personnalisation
         let boardColor = '#1e1e2e';
         let frameStyle = 'white';
         let cameraFilter = 'none';
         let camSize = 160;
-        let faceBgColor = '#ffffff';
+        let faceBgColor = '#000000'; // FOND NOIR PAR DÉFAUT
 
-        // --- Format ---
+        // Format
         let currentFormat = 'youtube';
         const FORMATS = {
             youtube: { width: 1280, height: 720,  label: 'YouTube 16:9' },
@@ -449,7 +401,7 @@
             short:   { width: 720,  height: 1280, label: 'Short 9:16'   }
         };
 
-        // --- Caméra ronde déplaçable ---
+        // Caméra ronde
         let camX = 0;
         let camY = 0;
         let camRadius = 160;
@@ -461,15 +413,18 @@
         let resizeStartDist = 0;
         let resizeStartRadius = 0;
 
-        // --- Segmentation (fond virtuel) ---
+        // Segmentation
         let selfieSegmentation = null;
-        let segmentationReady = false;
         let segmentationLoopActive = false;
         let compositeCanvas = document.createElement('canvas');
         compositeCanvas.width = 1280;
         compositeCanvas.height = 720;
         let compositeCtx = compositeCanvas.getContext('2d');
         let lastSegmentationResult = null;
+
+        // Canvas temporaire réutilisé pour la découpe
+        let tmpCanvas = document.createElement('canvas');
+        let tmpCtx = tmpCanvas.getContext('2d');
 
         function setStatus(msg, type = '') {
             const el = document.getElementById('statusMsg');
@@ -487,6 +442,8 @@
             boardCanvas.height = cfg.height;
             compositeCanvas.width = cfg.width;
             compositeCanvas.height = cfg.height;
+            tmpCanvas.width = cfg.width;
+            tmpCanvas.height = cfg.height;
 
             videoStage.style.aspectRatio = `${cfg.width} / ${cfg.height}`;
 
@@ -511,7 +468,7 @@
                 btn.classList.toggle('active', btn.dataset.format === format);
             });
 
-            setStatus(`📐 Format : ${cfg.label} (${cfg.width}×${cfg.height})`, 'info');
+            setStatus(`📐 Format : ${cfg.label}`, 'info');
         }
 
         document.querySelectorAll('#formatToggle button').forEach(btn => {
@@ -521,7 +478,7 @@
             });
         });
 
-        // ==================== FILTRES CANVAS ====================
+        // ==================== FILTRES ====================
         function getFilterString() {
             switch (cameraFilter) {
                 case 'warm':      return 'saturate(1.3) sepia(0.25) brightness(1.05)';
@@ -536,35 +493,26 @@
             }
         }
 
-        // ==================== SEGMENTATION (fond virtuel) ====================
+        // ==================== SEGMENTATION ====================
         function initSegmentation() {
             if (typeof SelfieSegmentation === 'undefined') {
-                console.warn('MediaPipe SelfieSegmentation non chargé');
-                setStatus('⚠️ Fond virtuel indisponible (librairie non chargée)', 'warn');
+                setStatus('⚠️ Fond virtuel indisponible', 'warn');
                 return;
             }
-
             loadingOverlay.classList.add('visible');
-
             try {
                 selfieSegmentation = new SelfieSegmentation({
                     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
                 });
-
-                selfieSegmentation.setOptions({
-                    modelSelection: 1,
-                });
-
+                selfieSegmentation.setOptions({ modelSelection: 1 });
                 selfieSegmentation.onResults((results) => {
-                    segmentationReady = true;
                     lastSegmentationResult = results;
                     loadingOverlay.classList.remove('visible');
                 });
-
                 startSegmentationLoop();
                 setStatus('✅ Fond virtuel prêt', 'success');
             } catch (e) {
-                console.error('Erreur init segmentation:', e);
+                console.error(e);
                 setStatus('⚠️ Impossible d\'initialiser le fond virtuel', 'warn');
                 loadingOverlay.classList.remove('visible');
             }
@@ -575,9 +523,7 @@
             segmentationLoopActive = true;
             const loop = async () => {
                 if (selfieSegmentation && cameraReady && videoElement.readyState >= 2) {
-                    try {
-                        await selfieSegmentation.send({ image: videoElement });
-                    } catch (e) {}
+                    try { await selfieSegmentation.send({ image: videoElement }); } catch (e) {}
                 }
                 if (segmentationLoopActive) requestAnimationFrame(loop);
             };
@@ -594,18 +540,13 @@
 
             const results = lastSegmentationResult;
 
+            // 1) Fond coloré (noir par défaut)
             compositeCtx.save();
             compositeCtx.fillStyle = faceBgColor;
             compositeCtx.fillRect(0, 0, W, H);
             compositeCtx.restore();
 
-            compositeCtx.save();
-
-            const tmp = document.createElement('canvas');
-            tmp.width = W;
-            tmp.height = H;
-            const tmpCtx = tmp.getContext('2d');
-
+            // 2) Découper la personne
             const vW = videoElement.videoWidth || 640;
             const vH = videoElement.videoHeight || 480;
             const scale = Math.max(W / vW, H / vH);
@@ -613,28 +554,29 @@
             const dH = vH * scale;
             const dX = (W - dW) / 2;
             const dY = (H - dH) / 2;
+
+            tmpCtx.clearRect(0, 0, W, H);
+            tmpCtx.globalCompositeOperation = 'source-over';
             tmpCtx.drawImage(videoElement, dX, dY, dW, dH);
-
-            const mask = results.segmentationMask;
             tmpCtx.globalCompositeOperation = 'destination-in';
-            tmpCtx.drawImage(mask, 0, 0, W, H);
+            tmpCtx.drawImage(results.segmentationMask, 0, 0, W, H);
+            tmpCtx.globalCompositeOperation = 'source-over';
 
-            compositeCtx.drawImage(tmp, 0, 0);
-            compositeCtx.restore();
+            compositeCtx.drawImage(tmpCanvas, 0, 0);
             return compositeCanvas;
         }
 
-        // ==================== INIT CAMÉRA ====================
+        // ==================== CAMÉRA ====================
         async function initCamera() {
             const banner = document.getElementById('helpBanner');
 
             if (!window.isSecureContext) {
-                setStatus('❌ Caméra bloquée : ouvrez via http://localhost (pas file://)', 'error');
+                setStatus('❌ Ouvrez via http://localhost', 'error');
                 banner.classList.add('visible');
                 return;
             }
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                setStatus('❌ getUserMedia non disponible', 'error');
+                setStatus('❌ Caméra non supportée', 'error');
                 banner.classList.add('visible');
                 return;
             }
@@ -649,16 +591,14 @@
                 } catch (constraintErr) {
                     if (constraintErr.name === 'OverconstrainedError') {
                         cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                    } else {
-                        throw constraintErr;
-                    }
+                    } else throw constraintErr;
                 }
 
                 videoElement.srcObject = cameraStream;
                 await videoElement.play();
                 cameraReady = true;
                 banner.classList.remove('visible');
-                setStatus('✅ Caméra active · fond virtuel en chargement...', 'success');
+                setStatus('✅ Caméra active', 'success');
 
                 setupTorch();
                 startBoardRendering();
@@ -667,16 +607,11 @@
                 let msg = '❌ ';
                 switch (err.name) {
                     case 'NotAllowedError':
-                    case 'PermissionDeniedError':
-                        msg += 'Permission refusée. Autorisez la caméra.';
-                        break;
-                    case 'NotFoundError': msg += 'Aucune caméra détectée.'; break;
-                    case 'NotReadableError': msg += 'Caméra utilisée ailleurs.'; break;
-                    case 'SecurityError':
-                        msg += 'Contexte non sécurisé (HTTPS/localhost).';
-                        banner.classList.add('visible');
-                        break;
-                    default: msg += err.name + ' – ' + err.message;
+                    case 'PermissionDeniedError': msg += 'Permission refusée'; break;
+                    case 'NotFoundError': msg += 'Aucune caméra'; break;
+                    case 'NotReadableError': msg += 'Caméra occupée'; break;
+                    case 'SecurityError': msg += 'HTTPS/localhost requis'; banner.classList.add('visible'); break;
+                    default: msg += err.name;
                 }
                 setStatus(msg, 'error');
             }
@@ -688,9 +623,8 @@
             const track = cameraStream.getVideoTracks()[0];
             if (!track) return;
             torchTrack = track;
-            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-            if (capabilities.torch) btn.disabled = false;
-            else { btn.disabled = true; btn.title = 'Torche non supportée'; }
+            const caps = track.getCapabilities ? track.getCapabilities() : {};
+            btn.disabled = !caps.torch;
         }
 
         async function toggleTorch() {
@@ -699,38 +633,33 @@
                 torchEnabled = !torchEnabled;
                 await torchTrack.applyConstraints({ advanced: [{ torch: torchEnabled }] });
                 const btn = document.getElementById('torchBtn');
-                if (torchEnabled) { btn.classList.add('active'); btn.innerText = '🔦 Flash : ON'; }
-                else { btn.classList.remove('active'); btn.innerText = '🔦 Flash : OFF'; }
+                btn.classList.toggle('active', torchEnabled);
+                btn.innerText = torchEnabled ? '🔦 ON' : '🔦 Flash';
             } catch (err) {
                 setStatus('Torche non disponible', 'error');
                 torchEnabled = false;
             }
         }
 
-        // ==================== GESTION SOURIS / TOUCH ====================
+        // ==================== INTERACTIONS ====================
         function getCanvasCoords(evt) {
             const rect = boardCanvas.getBoundingClientRect();
             const scaleX = boardCanvas.width / rect.width;
             const scaleY = boardCanvas.height / rect.height;
             const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
             const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
-            return {
-                x: (clientX - rect.left) * scaleX,
-                y: (clientY - rect.top) * scaleY
-            };
+            return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
         }
 
         function isInsideCamera(pos) {
             if (!cameraReady) return false;
-            const dx = pos.x - camX;
-            const dy = pos.y - camY;
+            const dx = pos.x - camX, dy = pos.y - camY;
             return (dx * dx + dy * dy) <= (camRadius * camRadius);
         }
 
         function isNearEdge(pos) {
             if (!cameraReady) return false;
-            const dx = pos.x - camX;
-            const dy = pos.y - camY;
+            const dx = pos.x - camX, dy = pos.y - camY;
             const dist = Math.sqrt(dx * dx + dy * dy);
             return dist > camRadius * 0.8 && dist <= camRadius + 15;
         }
@@ -739,8 +668,7 @@
             const pos = getCanvasCoords(evt);
             if (isInsideCamera(pos)) {
                 if (isNearEdge(pos) && evt.touches && evt.touches.length === 2) {
-                    const t1 = evt.touches[0];
-                    const t2 = evt.touches[1];
+                    const t1 = evt.touches[0], t2 = evt.touches[1];
                     resizeStartDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
                     resizeStartRadius = camRadius;
                     isResizing = true;
@@ -752,7 +680,6 @@
                 dragOffsetY = pos.y - camY;
                 boardCanvas.style.cursor = 'grabbing';
                 evt.preventDefault();
-
                 const hint = document.getElementById('dragHint');
                 if (hint && !hasDraggedOnce) hint.style.opacity = '0';
             }
@@ -761,26 +688,22 @@
         function onPointerMove(evt) {
             const pos = getCanvasCoords(evt);
             if (isResizing && evt.touches && evt.touches.length === 2) {
-                const t1 = evt.touches[0];
-                const t2 = evt.touches[1];
+                const t1 = evt.touches[0], t2 = evt.touches[1];
                 const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
                 const ratio = dist / resizeStartDist;
-                const newRadius = Math.max(60, Math.min(500, resizeStartRadius * ratio));
-                camRadius = newRadius;
-                camSize = Math.round(newRadius);
-                document.getElementById('camSize').value = Math.min(360, Math.max(80, camSize));
-                document.getElementById('camSizeVal').textContent = document.getElementById('camSize').value;
+                camRadius = Math.max(60, Math.min(500, resizeStartRadius * ratio));
+                camSize = Math.round(camRadius);
+                const s = document.getElementById('camSize');
+                s.value = Math.min(360, Math.max(80, camSize));
+                document.getElementById('camSizeVal').textContent = s.value;
                 evt.preventDefault();
                 return;
             }
-
             if (isDragging) {
-                let newX = pos.x - dragOffsetX;
-                let newY = pos.y - dragOffsetY;
-                newX = Math.max(camRadius, Math.min(boardCanvas.width - camRadius, newX));
-                newY = Math.max(camRadius, Math.min(boardCanvas.height - camRadius, newY));
-                camX = newX;
-                camY = newY;
+                let nx = pos.x - dragOffsetX, ny = pos.y - dragOffsetY;
+                nx = Math.max(camRadius, Math.min(boardCanvas.width - camRadius, nx));
+                ny = Math.max(camRadius, Math.min(boardCanvas.height - camRadius, ny));
+                camX = nx; camY = ny;
                 hasDraggedOnce = true;
                 evt.preventDefault();
             } else {
@@ -791,15 +714,8 @@
         }
 
         function onPointerUp(evt) {
-            if (isDragging) {
-                isDragging = false;
-                boardCanvas.style.cursor = 'crosshair';
-                evt.preventDefault();
-            }
-            if (isResizing) {
-                isResizing = false;
-                evt.preventDefault();
-            }
+            if (isDragging) { isDragging = false; boardCanvas.style.cursor = 'crosshair'; evt.preventDefault(); }
+            if (isResizing) { isResizing = false; evt.preventDefault(); }
         }
 
         boardCanvas.addEventListener('wheel', (evt) => {
@@ -809,56 +725,29 @@
                 const delta = evt.deltaY > 0 ? -12 : 12;
                 camRadius = Math.max(60, Math.min(500, camRadius + delta));
                 camSize = Math.round(camRadius);
-                const slider = document.getElementById('camSize');
-                slider.value = Math.min(360, Math.max(80, camSize));
-                document.getElementById('camSizeVal').textContent = slider.value;
+                const s = document.getElementById('camSize');
+                s.value = Math.min(360, Math.max(80, camSize));
+                document.getElementById('camSizeVal').textContent = s.value;
             }
         }, { passive: false });
 
         boardCanvas.addEventListener('mousedown', onPointerDown);
         window.addEventListener('mousemove', onPointerMove);
         window.addEventListener('mouseup', onPointerUp);
-
         boardCanvas.addEventListener('touchstart', onPointerDown, { passive: false });
         window.addEventListener('touchmove', onPointerMove, { passive: false });
         window.addEventListener('touchend', onPointerUp, { passive: false });
 
-        // ==================== OPTIONS UI ====================
-        document.querySelectorAll('#boardSwatches .swatch').forEach(sw => {
-            sw.addEventListener('click', () => {
-                document.querySelectorAll('#boardSwatches .swatch').forEach(s => s.classList.remove('active'));
-                sw.classList.add('active');
-                boardColor = sw.dataset.color;
-                setStatus('🎨 Couleur du tableau changée', 'info');
-            });
-        });
-
+        // ==================== OPTIONS ====================
         document.getElementById('frameSelect').addEventListener('change', (e) => {
             frameStyle = e.target.value;
-            setStatus('🖼️ Cadre : ' + e.target.options[e.target.selectedIndex].text, 'info');
         });
-
         document.getElementById('filterSelect').addEventListener('change', (e) => {
             cameraFilter = e.target.value;
-            setStatus('✨ Filtre caméra : ' + e.target.options[e.target.selectedIndex].text, 'info');
         });
-
-        const bgColorInput = document.getElementById('bgColorInput');
-        bgColorInput.addEventListener('input', (e) => {
+        document.getElementById('bgColorInput').addEventListener('input', (e) => {
             faceBgColor = e.target.value;
-            document.querySelectorAll('#bgSwatches .swatch').forEach(s => s.classList.remove('active'));
         });
-
-        document.querySelectorAll('#bgSwatches .swatch').forEach(sw => {
-            sw.addEventListener('click', () => {
-                document.querySelectorAll('#bgSwatches .swatch').forEach(s => s.classList.remove('active'));
-                sw.classList.add('active');
-                faceBgColor = sw.dataset.color;
-                bgColorInput.value = faceBgColor;
-                setStatus('🟩 Fond du visage changé', 'info');
-            });
-        });
-
         const camSizeSlider = document.getElementById('camSize');
         const camSizeVal = document.getElementById('camSizeVal');
         camSizeSlider.addEventListener('input', (e) => {
@@ -868,9 +757,16 @@
         });
 
         // ==================== RENDU ====================
+        function isLightColor(hex) {
+            const c = hex.replace('#', '');
+            const r = parseInt(c.substr(0, 2), 16);
+            const g = parseInt(c.substr(2, 2), 16);
+            const b = parseInt(c.substr(4, 2), 16);
+            return ((0.299 * r + 0.587 * g + 0.114 * b) / 255) > 0.6;
+        }
+
         function drawBoardBackground() {
-            const W = boardCanvas.width;
-            const H = boardCanvas.height;
+            const W = boardCanvas.width, H = boardCanvas.height;
             const isLight = isLightColor(boardColor);
 
             boardCtx.fillStyle = boardColor;
@@ -892,18 +788,20 @@
             boardCtx.stroke();
         }
 
-        function isLightColor(hex) {
-            const c = hex.replace('#', '');
-            const r = parseInt(c.substr(0, 2), 16);
-            const g = parseInt(c.substr(2, 2), 16);
-            const b = parseInt(c.substr(4, 2), 16);
-            const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-            return lum > 0.6;
+        function drawRoundRect(ctx, x, y, w, h, r) {
+            if (w < 2 * r) r = w / 2;
+            if (h < 2 * r) r = h / 2;
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r);
+            ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r);
+            ctx.arcTo(x, y, x + w, y, r);
+            ctx.closePath();
         }
 
         function drawSentenceOnBoard(item, index, total) {
-            const W = boardCanvas.width;
-            const H = boardCanvas.height;
+            const W = boardCanvas.width, H = boardCanvas.height;
             const isLight = isLightColor(boardColor);
             const isPortrait = H > W;
 
@@ -951,8 +849,7 @@
             words.forEach(word => {
                 const testLine = currentLine ? currentLine + ' ' + word : word;
                 if (boardCtx.measureText(testLine).width > maxWidth && currentLine) {
-                    lines.push(currentLine);
-                    currentLine = word;
+                    lines.push(currentLine); currentLine = word;
                 } else currentLine = testLine;
             });
             lines.push(currentLine);
@@ -995,28 +892,21 @@
                     boardCtx.beginPath();
                     boardCtx.arc(camX, camY, radius + 6, 0, Math.PI * 2);
                     boardCtx.strokeStyle = 'rgba(255,255,255,0.95)';
-                    boardCtx.lineWidth = 7;
-                    boardCtx.stroke();
+                    boardCtx.lineWidth = 7; boardCtx.stroke();
                     break;
                 case 'glow':
-                    boardCtx.shadowColor = '#6c5ce7';
-                    boardCtx.shadowBlur = 30;
+                    boardCtx.shadowColor = '#6c5ce7'; boardCtx.shadowBlur = 30;
                     boardCtx.beginPath();
                     boardCtx.arc(camX, camY, radius + 3, 0, Math.PI * 2);
-                    boardCtx.strokeStyle = '#a29bfe';
-                    boardCtx.lineWidth = 6;
-                    boardCtx.stroke();
+                    boardCtx.strokeStyle = '#a29bfe'; boardCtx.lineWidth = 6; boardCtx.stroke();
                     boardCtx.shadowBlur = 0;
                     break;
                 case 'neon':
                     boardCtx.beginPath();
                     boardCtx.arc(camX, camY, radius + 4, 0, Math.PI * 2);
-                    boardCtx.strokeStyle = '#00e5ff';
-                    boardCtx.lineWidth = 6;
-                    boardCtx.shadowColor = '#00e5ff';
-                    boardCtx.shadowBlur = 18;
-                    boardCtx.stroke();
-                    boardCtx.shadowBlur = 0;
+                    boardCtx.strokeStyle = '#00e5ff'; boardCtx.lineWidth = 6;
+                    boardCtx.shadowColor = '#00e5ff'; boardCtx.shadowBlur = 18;
+                    boardCtx.stroke(); boardCtx.shadowBlur = 0;
                     break;
                 case 'gold':
                     const grad = boardCtx.createLinearGradient(camX - radius, camY - radius, camX + radius, camY + radius);
@@ -1025,17 +915,14 @@
                     grad.addColorStop(1, '#f9d423');
                     boardCtx.beginPath();
                     boardCtx.arc(camX, camY, radius + 5, 0, Math.PI * 2);
-                    boardCtx.strokeStyle = grad;
-                    boardCtx.lineWidth = 8;
-                    boardCtx.stroke();
+                    boardCtx.strokeStyle = grad; boardCtx.lineWidth = 8; boardCtx.stroke();
                     break;
                 case 'dashed':
                     boardCtx.beginPath();
                     boardCtx.arc(camX, camY, radius + 5, 0, Math.PI * 2);
                     boardCtx.strokeStyle = 'rgba(255,255,255,0.9)';
                     boardCtx.lineWidth = 6;
-                    boardCtx.setLineDash([14, 10]);
-                    boardCtx.stroke();
+                    boardCtx.setLineDash([14, 10]); boardCtx.stroke();
                     boardCtx.setLineDash([]);
                     break;
                 case 'none':
@@ -1043,8 +930,7 @@
                     boardCtx.beginPath();
                     boardCtx.arc(camX, camY, radius, 0, Math.PI * 2);
                     boardCtx.strokeStyle = 'rgba(255,255,255,0.3)';
-                    boardCtx.lineWidth = 1;
-                    boardCtx.stroke();
+                    boardCtx.lineWidth = 1; boardCtx.stroke();
                     break;
             }
             boardCtx.restore();
@@ -1052,7 +938,6 @@
 
         function drawCameraCircle() {
             if (!cameraReady || videoElement.readyState < 2) return;
-
             const radius = camRadius;
             if (camX === 0 && camY === 0) {
                 camX = boardCanvas.width - radius - 50;
@@ -1096,44 +981,27 @@
             boardCtx.beginPath();
             boardCtx.arc(camX, camY + radius - 4, 5, 0, Math.PI * 2);
             boardCtx.strokeStyle = 'rgba(0,0,0,0.4)';
-            boardCtx.lineWidth = 1;
-            boardCtx.stroke();
-        }
-
-        function drawRoundRect(ctx, x, y, w, h, r) {
-            if (w < 2 * r) r = w / 2;
-            if (h < 2 * r) r = h / 2;
-            ctx.beginPath();
-            ctx.moveTo(x + r, y);
-            ctx.arcTo(x + w, y, x + w, y + h, r);
-            ctx.arcTo(x + w, y + h, x, y + h, r);
-            ctx.arcTo(x, y + h, x, y, r);
-            ctx.arcTo(x, y, x + w, y, r);
-            ctx.closePath();
+            boardCtx.lineWidth = 1; boardCtx.stroke();
         }
 
         function startBoardRendering() {
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
-
             function render(timestamp) {
                 if (timestamp - lastRenderTime < 33) {
-                    animationFrameId = requestAnimationFrame(render);
-                    return;
+                    animationFrameId = requestAnimationFrame(render); return;
                 }
                 lastRenderTime = timestamp;
-
                 drawBoardBackground();
                 const activeIndex = isPlaying ? currentIndex : 0;
                 const item = sentenceData[activeIndex];
                 drawSentenceOnBoard(item, activeIndex, sentenceData.length);
                 drawCameraCircle();
-
                 animationFrameId = requestAnimationFrame(render);
             }
             animationFrameId = requestAnimationFrame(render);
         }
 
-        // ==================== TTS (muet) + TIMING 3s ====================
+        // ==================== TTS + TIMING 3s ====================
         function processText() {
             stopSpeech();
             const input = document.getElementById('textInput').value;
@@ -1151,7 +1019,7 @@
             if (sentenceData.length > 0) {
                 document.getElementById('playBtn').disabled = false;
                 document.getElementById('recordBtn').disabled = false;
-                setStatus(`✅ Liste chargée : ${sentenceData.length} lignes · 3s par phrase`, 'success');
+                setStatus(`✅ ${sentenceData.length} lignes chargées · 3s par phrase`, 'success');
                 if (!animationFrameId) startBoardRendering();
             } else {
                 document.getElementById('playBtn').disabled = true;
@@ -1161,10 +1029,7 @@
         }
 
         function clearStepTimer() {
-            if (stepTimer) {
-                clearTimeout(stepTimer);
-                stepTimer = null;
-            }
+            if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
         }
 
         function speakStep() {
@@ -1187,39 +1052,15 @@
             utterance.rate = 0.95;
             utterance.pitch = 1.0;
 
-            // Durée fixe de 3 secondes pour l'affichage
-            sentenceDurationMs = DISPLAY_DURATION_MS;
             sentenceStartTime = Date.now();
-
-            // Gérer l'enchaînement avec un timer de 3 secondes exact
             clearStepTimer();
-
-            utterance.onend = () => {
-                // On ignore onend pour respecter exactement 3 secondes
-            };
-
-            utterance.onerror = (e) => {
-                console.warn('TTS:', e);
-                // Ne pas stopper : on garde le rythme de 3 secondes
-            };
-
             synth.speak(utterance);
 
-            // Programmer le passage à la phrase suivante après 3 secondes
             stepTimer = setTimeout(() => {
-                if (!isPlaying) return;
-                if (isPaused) {
-                    // Si en pause, on attend la reprise via togglePause
-                    return;
-                }
+                if (!isPlaying || isPaused) return;
                 repeatCounter++;
-                if (repeatCounter < currentItem.maxRepeats) {
-                    speakStep();
-                } else {
-                    currentIndex++;
-                    repeatCounter = 0;
-                    speakStep();
-                }
+                if (repeatCounter < currentItem.maxRepeats) speakStep();
+                else { currentIndex++; repeatCounter = 0; speakStep(); }
             }, DISPLAY_DURATION_MS);
         }
 
@@ -1248,7 +1089,6 @@
                 isPaused = false;
                 document.getElementById('pauseBtn').innerText = "⏸ Pause";
                 if (synth.paused) synth.resume();
-                // Reprendre le timer avec le temps restant
                 const elapsed = Date.now() - sentenceStartTime;
                 const remaining = Math.max(50, DISPLAY_DURATION_MS - elapsed);
                 const currentItem = sentenceData[currentIndex];
@@ -1263,8 +1103,7 @@
         }
 
         function stopSpeech() {
-            isPlaying = false;
-            isPaused = false;
+            isPlaying = false; isPaused = false;
             clearStepTimer();
             synth.cancel();
             document.getElementById('playBtn').style.display = 'flex';
@@ -1275,8 +1114,8 @@
         function toggleLoop() {
             isLooping = !isLooping;
             const btn = document.getElementById('loopBtn');
-            if (isLooping) { btn.classList.add('active'); btn.innerText = "🔁 Boucle : ON"; }
-            else { btn.classList.remove('active'); btn.innerText = "🔁 Boucle : OFF"; }
+            btn.classList.toggle('btn-active', isLooping);
+            btn.innerText = isLooping ? '🔁 ON' : '🔁 Boucle';
         }
 
         // ==================== MIC ====================
@@ -1287,15 +1126,12 @@
                 });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 if (audioCtx.state === 'suspended') await audioCtx.resume();
-                micSource = audioCtx.createMediaStreamSource(micStream);
-                micAnalyser = audioCtx.createAnalyser();
-                micAnalyser.fftSize = 256;
-                micSource.connect(micAnalyser);
+                const src = audioCtx.createMediaStreamSource(micStream);
                 recordDestination = audioCtx.createMediaStreamDestination();
-                micSource.connect(recordDestination);
+                src.connect(recordDestination);
                 return recordDestination.stream;
             } catch (err) {
-                setStatus('⚠️ Micro inaccessible : ' + err.name, 'warn');
+                setStatus('⚠️ Micro inaccessible', 'warn');
                 return null;
             }
         }
@@ -1303,7 +1139,7 @@
         function stopMicCapture() {
             if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
             if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
-            micAnalyser = null; micSource = null; recordDestination = null;
+            recordDestination = null;
         }
 
         // ==================== ENREGISTREMENT ====================
@@ -1331,9 +1167,9 @@
             if (sentenceData.length === 0) { setStatus('Chargez d\'abord une liste', 'error'); return; }
             if (!cameraReady) { await initCamera(); await new Promise(r => setTimeout(r, 800)); }
 
-            setStatus('🎤 Demande d\'accès au micro...', 'info');
+            setStatus('🎤 Accès micro...', 'info');
             const micAudioStream = await startMicCapture();
-            if (!micAudioStream) { setStatus('❌ Micro requis pour le son.', 'error'); return; }
+            if (!micAudioStream) { setStatus('❌ Micro requis', 'error'); return; }
 
             recordedChunks = [];
             const canvasStream = boardCanvas.captureStream(30);
@@ -1348,25 +1184,25 @@
                     mimeType, videoBitsPerSecond: 4000000, audioBitsPerSecond: 128000
                 });
             } catch (e) {
-                setStatus('Enregistrement non supporté : ' + e.message, 'error');
+                setStatus('Enregistrement non supporté', 'error');
                 stopMicCapture(); return;
             }
 
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data && event.data.size > 0) recordedChunks.push(event.data);
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) recordedChunks.push(e.data);
             };
 
             mediaRecorder.onstop = () => {
                 stopMicCapture();
                 if (recordedChunks.length === 0) {
-                    setStatus('Aucune donnée enregistrée', 'error');
+                    setStatus('Aucune donnée', 'error');
                     isRecording = false; return;
                 }
                 const actualMime = mediaRecorder.mimeType || mimeType;
                 const ext = actualMime.includes('mp4') ? 'mp4' : 'webm';
                 const blob = new Blob(recordedChunks, { type: actualMime.split(';')[0] });
                 if (blob.size < 1000) {
-                    setStatus('Enregistrement trop court ou vide', 'error');
+                    setStatus('Enregistrement vide', 'error');
                     isRecording = false; return;
                 }
                 const url = URL.createObjectURL(blob);
@@ -1376,22 +1212,22 @@
                 a.download = `apprentissage-${fmtLabel}-${Date.now()}.${ext}`;
                 document.body.appendChild(a); a.click(); document.body.removeChild(a);
                 setTimeout(() => URL.revokeObjectURL(url), 10000);
-                setStatus(`✅ Vidéo téléchargée (${ext.toUpperCase()}, ${(blob.size/1024/1024).toFixed(1)} Mo)`, 'success');
+                setStatus(`✅ Vidéo téléchargée (${(blob.size/1024/1024).toFixed(1)} Mo)`, 'success');
                 isRecording = false;
                 const btn = document.getElementById('recordBtn');
                 btn.classList.remove('recording'); btn.innerText = '⏺ Enregistrer';
             };
 
             mediaRecorder.onerror = (e) => {
-                setStatus('Erreur d\'enregistrement : ' + (e.error?.message || e.error), 'error');
+                setStatus('Erreur enregistrement', 'error');
                 stopMicCapture();
             };
 
             mediaRecorder.start(1000);
             isRecording = true;
             const btn = document.getElementById('recordBtn');
-            btn.classList.add('recording'); btn.innerText = '⏹ Arrêter';
-            setStatus(`⏺ Enregistrement (${FORMATS[currentFormat].label})...`, 'success');
+            btn.classList.add('recording'); btn.innerText = '⏹ Stop';
+            setStatus(`⏺ Enregistrement...`, 'success');
             if (!isPlaying) startPlayAll();
             recordTimer = setTimeout(() => { if (isRecording) stopRecording(); }, RECORD_DURATION_MS);
         }
@@ -1414,6 +1250,8 @@
                 speechSynthesis.onvoiceschanged = () => synth.getVoices();
             }
             document.getElementById('camSizeVal').textContent = camSize;
+            // S'assurer que la couleur du fond visage est bien noir
+            document.getElementById('bgColorInput').value = faceBgColor;
         });
 
         window.addEventListener('beforeunload', () => {
