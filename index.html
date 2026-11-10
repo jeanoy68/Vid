@@ -92,7 +92,6 @@
         button:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.9; }
         button:disabled { opacity: 0.2; cursor: not-allowed; }
 
-        /* ===== Barre d'options ===== */
         .options-bar {
             width: 100%;
             max-width: 900px;
@@ -144,7 +143,6 @@
         .swatch:hover { transform: scale(1.15); }
         .swatch.active { border-color: var(--accent); box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent); }
 
-        /* Format toggle */
         .format-toggle {
             display: flex;
             gap: 4px;
@@ -315,7 +313,6 @@
         <div class="mute-note">🔇 TTS désactivé · Chaque phrase s'affiche 3 secondes · Fond virtuel colorisable</div>
     </div>
 
-    <!-- Barre d'options -->
     <div class="options-bar">
         <label>📐 Format :
             <div class="format-toggle" id="formatToggle">
@@ -444,9 +441,16 @@
             short:   { width: 720,  height: 1280, label: 'Short 9:16'   }
         };
 
+        // ===== Caméra : position RÉELLE (rendue) =====
         let camX = 0;
         let camY = 0;
         let camRadius = 160;
+
+        // ===== Caméra : position CIBLE (souris/doigt) =====
+        let camTargetX = 0;
+        let camTargetY = 0;
+        let camTargetRadius = 160;
+
         let isDragging = false;
         let dragOffsetX = 0;
         let dragOffsetY = 0;
@@ -464,11 +468,20 @@
         let compositeCtx = compositeCanvas.getContext('2d');
         let lastSegmentationResult = null;
 
-        // Réutilisable pour éviter les allocations par frame
+        // ===== Buffers réutilisables =====
         const _bgTmp = document.createElement('canvas');
         const _bgTmpCtx = _bgTmp.getContext('2d');
         const _maskTmp = document.createElement('canvas');
         const _maskTmpCtx = _maskTmp.getContext('2d');
+
+        // ===== Canvas downscalé pour l'inférence (256×256) =====
+        const _segInput = document.createElement('canvas');
+        _segInput.width = 256;
+        _segInput.height = 256;
+        const _segInputCtx = _segInput.getContext('2d');
+
+        // ===== Throttle du compositing =====
+        let _lastCompositeTime = 0;
 
         function setStatus(msg, type = '') {
             const el = document.getElementById('statusMsg');
@@ -500,6 +513,11 @@
                 camY = Math.max(camRadius, Math.min(cfg.height - camRadius, camY));
             }
 
+            // Synchroniser les cibles
+            camTargetX = camX;
+            camTargetY = camY;
+            camTargetRadius = camRadius;
+
             camSize = Math.round(camRadius);
             const slider = document.getElementById('camSize');
             slider.max = Math.round(base * 0.45);
@@ -520,7 +538,7 @@
             });
         });
 
-        // ==================== FILTRES CANVAS ====================
+        // ==================== FILTRES ====================
         function getFilterString() {
             switch (cameraFilter) {
                 case 'warm':      return 'saturate(1.3) sepia(0.25) brightness(1.05)';
@@ -567,13 +585,16 @@
             }
         }
 
+        // ✅ CORRIGÉ : inférence sur 256×256 au lieu de 1280×720
         async function startSegmentationLoop() {
             if (segmentationLoopActive) return;
             segmentationLoopActive = true;
+
             const loop = async () => {
                 if (selfieSegmentation && cameraReady && videoElement.readyState >= 2) {
                     try {
-                        await selfieSegmentation.send({ image: videoElement });
+                        _segInputCtx.drawImage(videoElement, 0, 0, 256, 256);
+                        await selfieSegmentation.send({ image: _segInput });
                     } catch (e) {}
                 }
                 if (segmentationLoopActive) requestAnimationFrame(loop);
@@ -581,7 +602,7 @@
             loop();
         }
 
-        // ✅ Version corrigée : masque aligné avec le "cover" du canvas
+        // ✅ CORRIGÉ : masque aligné + throttle 16ms
         function getCameraWithBackground() {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -589,6 +610,13 @@
             if (!lastSegmentationResult || !lastSegmentationResult.segmentationMask) {
                 return videoElement;
             }
+
+            // Throttle : ne recompose pas plus vite que ~60fps
+            const now = performance.now();
+            if (now - _lastCompositeTime < 16) {
+                return compositeCanvas;
+            }
+            _lastCompositeTime = now;
 
             const results = lastSegmentationResult;
             const vW = videoElement.videoWidth || 640;
@@ -599,31 +627,26 @@
                 _maskTmp.width = W; _maskTmp.height = H;
             }
 
-            // Calcul "cover" identique pour la vidéo ET le masque
             const scale = Math.max(W / vW, H / vH);
             const dW = vW * scale;
             const dH = vH * scale;
             const dX = (W - dW) / 2;
             const dY = (H - dH) / 2;
 
-            // 1) Vidéo cover
             _bgTmpCtx.save();
             _bgTmpCtx.clearRect(0, 0, W, H);
             _bgTmpCtx.drawImage(videoElement, dX, dY, dW, dH);
 
-            // 2) Masque cover (mêmes coordonnées)
             _maskTmpCtx.save();
             _maskTmpCtx.clearRect(0, 0, W, H);
             _maskTmpCtx.drawImage(results.segmentationMask, dX, dY, dW, dH);
             _maskTmpCtx.restore();
 
-            // 3) Intersection alpha
             _bgTmpCtx.globalCompositeOperation = 'destination-in';
             _bgTmpCtx.drawImage(_maskTmp, 0, 0);
             _bgTmpCtx.globalCompositeOperation = 'source-over';
             _bgTmpCtx.restore();
 
-            // 4) Composition sur la couleur de fond + miroir
             compositeCtx.save();
             compositeCtx.fillStyle = faceBgColor;
             compositeCtx.fillRect(0, 0, W, H);
@@ -653,8 +676,14 @@
             try {
                 setStatus('Demande d\'accès à la caméra...', 'info');
                 try {
+                    // ✅ CORRIGÉ : contrainte frameRate pour éviter la chute de FPS
                     cameraStream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+                        video: {
+                            facingMode: 'user',
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            frameRate: { ideal: 30, min: 24 }
+                        },
                         audio: false
                     });
                 } catch (constraintErr) {
@@ -718,7 +747,7 @@
             }
         }
 
-        // ==================== GESTION SOURIS / TOUCH ====================
+        // ==================== POINTEURS ====================
         function getCanvasCoords(evt) {
             const rect = boardCanvas.getBoundingClientRect();
             const scaleX = boardCanvas.width / rect.width;
@@ -761,6 +790,9 @@
                 isDragging = true;
                 dragOffsetX = pos.x - camX;
                 dragOffsetY = pos.y - camY;
+                // ✅ Synchroniser les cibles avec la position réelle
+                camTargetX = camX;
+                camTargetY = camY;
                 boardCanvas.style.cursor = 'grabbing';
                 evt.preventDefault();
 
@@ -777,7 +809,7 @@
                 const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
                 const ratio = dist / resizeStartDist;
                 const newRadius = Math.max(60, Math.min(500, resizeStartRadius * ratio));
-                camRadius = newRadius;
+                camTargetRadius = newRadius;
                 camSize = Math.round(newRadius);
                 document.getElementById('camSize').value = Math.min(360, Math.max(80, camSize));
                 document.getElementById('camSizeVal').textContent = document.getElementById('camSize').value;
@@ -790,8 +822,9 @@
                 let newY = pos.y - dragOffsetY;
                 newX = Math.max(camRadius, Math.min(boardCanvas.width - camRadius, newX));
                 newY = Math.max(camRadius, Math.min(boardCanvas.height - camRadius, newY));
-                camX = newX;
-                camY = newY;
+                // ✅ Écrire dans les CIBLES, pas dans les positions rendues
+                camTargetX = newX;
+                camTargetY = newY;
                 hasDraggedOnce = true;
                 evt.preventDefault();
             } else {
@@ -818,8 +851,8 @@
             if (isInsideCamera(pos)) {
                 evt.preventDefault();
                 const delta = evt.deltaY > 0 ? -12 : 12;
-                camRadius = Math.max(60, Math.min(500, camRadius + delta));
-                camSize = Math.round(camRadius);
+                camTargetRadius = Math.max(60, Math.min(500, camRadius + delta));
+                camSize = Math.round(camTargetRadius);
                 const slider = document.getElementById('camSize');
                 slider.value = Math.min(360, Math.max(80, camSize));
                 document.getElementById('camSizeVal').textContent = slider.value;
@@ -874,7 +907,8 @@
         const camSizeVal = document.getElementById('camSizeVal');
         camSizeSlider.addEventListener('input', (e) => {
             camSize = parseInt(e.target.value, 10);
-            camRadius = camSize;
+            // ✅ Cible au lieu de la valeur rendue
+            camTargetRadius = camSize;
             camSizeVal.textContent = camSize;
         });
 
@@ -1068,6 +1102,8 @@
             if (camX === 0 && camY === 0) {
                 camX = boardCanvas.width - radius - 50;
                 camY = boardCanvas.height - radius - 50;
+                camTargetX = camX;
+                camTargetY = camY;
             }
 
             boardCtx.save();
@@ -1133,6 +1169,12 @@
                 }
                 lastRenderTime = timestamp;
 
+                // ✅ Interpolation douce de la caméra vers sa cible
+                const lerpFactor = 0.28;
+                camX += (camTargetX - camX) * lerpFactor;
+                camY += (camTargetY - camY) * lerpFactor;
+                camRadius += (camTargetRadius - camRadius) * lerpFactor;
+
                 drawBoardBackground();
                 const activeIndex = isPlaying ? currentIndex : 0;
                 const item = sentenceData[activeIndex];
@@ -1144,7 +1186,7 @@
             animationFrameId = requestAnimationFrame(render);
         }
 
-        // ==================== TTS (muet) + TIMING 3s ====================
+        // ==================== TTS ====================
         function processText() {
             stopSpeech();
             const input = document.getElementById('textInput').value;
