@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apprentissage Bilingue · Livre Histoire</title>
+    <title>Apprentissage Bilingue · Livre Histoire Pro</title>
     <style>
         :root {
             --en-red: #d9534f;
@@ -313,12 +313,12 @@
         .book-nav button {
             background: #f0f0f0;
             color: #333;
-            padding: 10px 26px;
+            padding: 12px 30px;
             font-size: 17px;
             border-radius: 30px;
             border: 2px solid #ddd;
             transition: all 0.2s;
-            min-width: 130px;
+            min-width: 140px;
             justify-content: center;
         }
         .book-nav button:hover:not(:disabled) {
@@ -335,43 +335,23 @@
             font-weight: bold;
             color: #4f46e5;
             font-size: 17px;
-            min-width: 100px;
+            min-width: 110px;
             text-align: center;
             letter-spacing: 0.5px;
         }
 
         /* Page flip animation */
         .flip-anim {
-            animation: pageFlip 0.35s ease-out;
+            animation: pageFlip 0.45s ease-out;
         }
         @keyframes pageFlip {
             0% { transform: perspective(1200px) rotateY(0deg); opacity: 1; }
-            45% { transform: perspective(1200px) rotateY(-8deg); opacity: 0.7; }
+            45% { transform: perspective(1200px) rotateY(-10deg); opacity: 0.75; }
             100% { transform: perspective(1200px) rotateY(0deg); opacity: 1; }
         }
 
         #bookNav { display: none; }
         #bookNav.visible { display: flex; }
-
-        /* Reading time control */
-        .reading-time-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .reading-time-group input[type="range"] {
-            width: 130px;
-        }
-        #readingTimeVal {
-            font-weight: 700;
-            color: var(--accent);
-            min-width: 42px;
-            font-size: 13px;
-        }
-        .reading-time-group small {
-            color: #888;
-            font-size: 11px;
-        }
     </style>
 </head>
 <body>
@@ -382,7 +362,7 @@
     </div>
 
     <div class="input-section">
-        <textarea id="textInput" placeholder="Collez votre histoire ici.&#10;Séparez chaque chapitre/paragraphe par une ligne vide (double retour à la ligne).&#10;&#10;Exemple :&#10;Chapter 1: The Beginning&#10;Once upon a time...&#10;&#10;Chapitre 2 : La suite&#10;Il était une fois...&#10;&#10;En mode STORY, chaque chapitre s'affiche sur une page complète du livre."></textarea>
+        <textarea id="textInput" placeholder="Collez votre histoire ici.&#10;Séparez chaque chapitre/paragraphe par une ligne vide (double retour à la ligne).&#10;&#10;Exemple :&#10;Chapter 1: The Beginning&#10;Once upon a time...&#10;&#10;Chapitre 2 : La suite&#10;Il était une fois...&#10;&#10;En mode STORY, chaque chapitre s'affiche sur une page complète du livre.&#10;Tournez les pages manuellement avec ◀ ▶."></textarea>
         <div class="controls">
             <button id="loadBtn" onclick="processText()">1. Charger l'histoire</button>
             <button id="playBtn" onclick="startPlayAll()" disabled>▶ Lire tout</button>
@@ -394,7 +374,7 @@
             <button id="storyModeBtn" onclick="toggleStoryMode()">📖 STORY : OFF</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
-        <div class="mute-note">🔇 TTS désactivé · Mode STORY : 1 chapitre par page · Temps de lecture ajustable</div>
+        <div class="mute-note">🔇 TTS désactivé · Mode STORY : 1 chapitre par page · Tournez les pages manuellement</div>
     </div>
 
     <div class="options-bar">
@@ -426,13 +406,6 @@
                 <div class="swatch" data-color="#55efc4" style="background:#55efc4" title="Menthe"></div>
                 <div class="swatch" data-color="#ffffff" style="background:#ffffff;border:1px solid #ccc" title="Blanc"></div>
             </div>
-        </label>
-
-        <!-- NEW: Reading time per chapter -->
-        <label class="reading-time-group">⏱️ Temps lecture :
-            <input type="range" id="readingTimeSlider" min="3" max="60" value="12" step="1">
-            <span id="readingTimeVal">12 s</span>
-            <small>par chapitre</small>
         </label>
 
         <label>🖼️ Cadre :
@@ -499,8 +472,8 @@
     <script>
         // ==================== ÉTAT GLOBAL ====================
         const synth = window.speechSynthesis;
-        let sentenceData = [];          // for classic mode
-        let chapters = [];              // for story mode : array of { title, text, lang, isEnglish }
+        let sentenceData = [];          // classic mode
+        let chapters = [];              // story mode
         let currentIndex = 0;
         let repeatCounter = 0;
         let isPlaying = false;
@@ -509,16 +482,12 @@
 
         // STORY MODE (book)
         let isStoryMode = false;
-        let currentPage = 0;            // chapter index
+        let currentPage = 0;
         let totalPages = 1;
 
-        // Reading time (in ms) for each chapter page during playback
-        let readingTimePerChapterMs = 12000;   // 12s default
-
-        // Text color
         let textColor = '#ff6b6b';
 
-        const DISPLAY_DURATION_MS = 3000;      // classic mode sentence display
+        const DISPLAY_DURATION_MS = 3000;
 
         const boardCanvas = document.getElementById('boardCanvas');
         const boardCtx = boardCanvas.getContext('2d');
@@ -543,7 +512,6 @@
         let recordDestination = null;
 
         let sentenceStartTime = 0;
-        let sentenceDurationMs = DISPLAY_DURATION_MS;
         let stepTimer = null;
 
         let torchEnabled = false;
@@ -1028,20 +996,6 @@
             camSizeVal.textContent = camSize;
         });
 
-        // ===== Reading time slider =====
-        const readingTimeSlider = document.getElementById('readingTimeSlider');
-        const readingTimeVal = document.getElementById('readingTimeVal');
-        function updateReadingTimeLabel() {
-            readingTimeVal.textContent = readingTimeSlider.value + ' s';
-        }
-        readingTimeSlider.addEventListener('input', (e) => {
-            const seconds = parseInt(e.target.value, 10);
-            readingTimePerChapterMs = seconds * 1000;
-            updateReadingTimeLabel();
-            setStatus(`⏱️ Temps de lecture : ${seconds} s par chapitre`, 'info');
-        });
-        updateReadingTimeLabel();
-
         // ==================== RENDU ====================
         function drawBoardBackground() {
             const W = boardCanvas.width;
@@ -1076,7 +1030,7 @@
             return lum > 0.6;
         }
 
-        // ========== CHAPTER / BOOK PAGE DRAWING ==========
+        // ========== PROFESSIONAL BOOK PAGE ==========
         function drawBookPageOnBoard() {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -1087,23 +1041,69 @@
             const pageNum = currentPage + 1;
             const totalPg = Math.max(1, chapters.length);
 
-            // Book spine shadow
-            const spineWidth = isPortrait ? 18 : 26;
-            const gradient = boardCtx.createLinearGradient(0, 0, spineWidth, 0);
-            gradient.addColorStop(0, 'rgba(0,0,0,0.35)');
-            gradient.addColorStop(1, 'rgba(0,0,0,0)');
-            boardCtx.fillStyle = gradient;
+            // ---- Book spine shadow ----
+            const spineWidth = isPortrait ? 22 : 32;
+            const spineGrad = boardCtx.createLinearGradient(0, 0, spineWidth, 0);
+            spineGrad.addColorStop(0, 'rgba(0,0,0,0.45)');
+            spineGrad.addColorStop(0.6, 'rgba(0,0,0,0.15)');
+            spineGrad.addColorStop(1, 'rgba(0,0,0,0)');
+            boardCtx.fillStyle = spineGrad;
             boardCtx.fillRect(0, 0, spineWidth, H);
 
-            // Page number
-            boardCtx.font = `bold ${isPortrait ? 18 : 22}px "Segoe UI", sans-serif`;
+            // ---- Page edge (right/bottom subtle inner shadow) ----
+            const edgeGrad = boardCtx.createLinearGradient(W, 0, W - 18, 0);
+            edgeGrad.addColorStop(0, 'rgba(0,0,0,0.10)');
+            edgeGrad.addColorStop(1, 'rgba(0,0,0,0)');
+            boardCtx.fillStyle = edgeGrad;
+            boardCtx.fillRect(W - 18, 0, 18, H);
+
+            // ---- Decorative top rule + chapter header ----
+            const marginL = isPortrait ? 55 : 90;
+            const marginR = isPortrait ? 55 : 90;
+            const contentW = W - marginL - marginR;
+
+            // Top decorative line
+            boardCtx.strokeStyle = isLight ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.22)';
+            boardCtx.lineWidth = 1;
+            boardCtx.beginPath();
+            boardCtx.moveTo(marginL, isPortrait ? 46 : 54);
+            boardCtx.lineTo(W - marginR, isPortrait ? 46 : 54);
+            boardCtx.stroke();
+
+            // Small ornament (✦) at top center
+            boardCtx.font = `${isPortrait ? 16 : 18}px "Segoe UI", sans-serif`;
+            boardCtx.textAlign = 'center';
+            boardCtx.textBaseline = 'middle';
+            boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)';
+            boardCtx.fillText('✦', W / 2, isPortrait ? 46 : 54);
+
+            // Chapter title
+            const titleSize = isPortrait ? 22 : 26;
+            const titleText = chapter ? chapter.title.toUpperCase() : 'CHAPITRE';
+            boardCtx.font = `700 ${titleSize}px "Georgia", "Segoe UI", serif`;
+            boardCtx.textAlign = 'center';
+            boardCtx.textBaseline = 'top';
+            boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.55)';
+            boardCtx.fillText(titleText, W / 2, isPortrait ? 66 : 76);
+
+            // Second decorative rule (below title)
+            const rule2Y = isPortrait ? 106 : 120;
+            boardCtx.strokeStyle = isLight ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.18)';
+            boardCtx.lineWidth = 1;
+            boardCtx.beginPath();
+            boardCtx.moveTo(marginL + contentW * 0.30, rule2Y);
+            boardCtx.lineTo(W - marginR - contentW * 0.30, rule2Y);
+            boardCtx.stroke();
+
+            // ---- Page number footer ----
+            boardCtx.font = `${isPortrait ? 15 : 17}px "Segoe UI", sans-serif`;
             boardCtx.textAlign = 'center';
             boardCtx.textBaseline = 'bottom';
-            boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)';
-            boardCtx.fillText(`— ${pageNum} / ${totalPg} —`, W / 2, H - 25);
+            boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)';
+            boardCtx.fillText(`— ${pageNum} —`, W / 2, H - 28);
 
             if (!chapter || !chapter.text) {
-                boardCtx.font = `italic ${isPortrait ? 26 : 32}px "Segoe UI", sans-serif`;
+                boardCtx.font = `italic ${isPortrait ? 26 : 32}px "Georgia", serif`;
                 boardCtx.textAlign = 'center';
                 boardCtx.textBaseline = 'middle';
                 boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)';
@@ -1111,27 +1111,23 @@
                 return;
             }
 
-            // Layout margins
-            const paddingTop = isPortrait ? 70 : 60;
-            const paddingBottom = isPortrait ? 90 : 100;
-            const paddingLeft = isPortrait ? 50 : 80;
-            const paddingRight = isPortrait ? 50 : 80;
-            const maxWidth = W - paddingLeft - paddingRight;
+            // ---- Body text layout ----
+            const paddingTop = isPortrait ? 130 : 150;
+            const paddingBottom = isPortrait ? 85 : 95;
             const contentHeight = H - paddingTop - paddingBottom;
 
-            // Font sizing – auto shrink to fit the whole chapter
-            let baseFontSize = isPortrait ? 28 : 34;
-            const lineHeightFactor = 1.45;
+            let baseFontSize = isPortrait ? 26 : 31;
+            const lineHeightFactor = 1.6;
             let lines = [];
 
             function wrapText(text, fontSize) {
-                boardCtx.font = `600 ${fontSize}px "Segoe UI", sans-serif`;
+                boardCtx.font = `400 ${fontSize}px "Georgia", "Segoe UI", serif`;
                 const words = text.split(/\s+/);
                 const out = [];
                 let cur = '';
                 for (const w of words) {
                     const test = cur ? cur + ' ' + w : w;
-                    if (boardCtx.measureText(test).width > maxWidth && cur) {
+                    if (boardCtx.measureText(test).width > contentW && cur) {
                         out.push(cur);
                         cur = w;
                     } else {
@@ -1143,43 +1139,44 @@
             }
 
             let attempts = 0;
-            while (attempts < 20) {
+            while (attempts < 24) {
                 lines = wrapText(chapter.text, baseFontSize);
                 const totalH = lines.length * baseFontSize * lineHeightFactor;
-                if (totalH <= contentHeight || baseFontSize <= 12) break;
-                baseFontSize -= 2;
+                if (totalH <= contentHeight || baseFontSize <= 11) break;
+                baseFontSize -= 1.5;
                 attempts++;
             }
 
             const lineHeight = baseFontSize * lineHeightFactor;
             const totalTextHeight = lines.length * lineHeight;
-            const startY = paddingTop + Math.max(0, (contentHeight - totalTextHeight) / 2) + lineHeight * 0.8;
+            const startY = paddingTop + Math.max(0, (contentHeight - totalTextHeight) / 2) + baseFontSize * 0.95;
 
-            boardCtx.font = `600 ${baseFontSize}px "Segoe UI", sans-serif`;
+            // Body text
+            boardCtx.font = `400 ${baseFontSize}px "Georgia", "Segoe UI", serif`;
             boardCtx.textAlign = 'left';
             boardCtx.textBaseline = 'alphabetic';
             boardCtx.fillStyle = textColor;
 
             lines.forEach((line, i) => {
-                boardCtx.fillText(line, paddingLeft, startY + i * lineHeight);
+                boardCtx.fillText(line, marginL, startY + i * lineHeight);
             });
 
-            // Progress bar during playback (based on chapter page)
+            // Subtle progress in book (only when playing)
             if (isPlaying) {
                 const progress = (currentPage + 1) / Math.max(1, chapters.length);
-                const barWidth = W * 0.5;
+                const barWidth = contentW * 0.4;
                 const barX = (W - barWidth) / 2;
-                const barY = H - 60;
-                boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
-                drawRoundRect(boardCtx, barX, barY, barWidth, 6, 3);
+                const barY = H - 50;
+                boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+                drawRoundRect(boardCtx, barX, barY, barWidth, 3, 1.5);
                 boardCtx.fill();
                 boardCtx.fillStyle = '#6c5ce7';
-                drawRoundRect(boardCtx, barX, barY, barWidth * Math.min(progress, 1), 6, 3);
+                drawRoundRect(boardCtx, barX, barY, barWidth * Math.min(progress, 1), 3, 1.5);
                 boardCtx.fill();
             }
         }
 
-        // ========== CLASSIC MODE (single sentence) ==========
+        // ========== CLASSIC MODE ==========
         function drawSentenceOnBoard(item, index, total) {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -1439,7 +1436,7 @@
                     currentPage = 0;
                     updateBookNav();
                 }
-                setStatus('📖 Mode STORY (livre) : 1 chapitre par page', 'info');
+                setStatus('📖 Mode STORY (livre) : 1 chapitre par page · Tournez manuellement', 'info');
             } else {
                 btn.classList.remove('active');
                 btn.innerText = '📖 STORY : OFF';
@@ -1485,8 +1482,6 @@
         }
 
         // ==================== TTS & PLAYBACK ====================
-        // Classic mode keeps line-by-line speech.
-        // Story mode advances chapter by chapter with a configurable reading time.
         function buildChapters(rawText) {
             const blocks = rawText
                 .replace(/\r\n/g, '\n')
@@ -1553,25 +1548,18 @@
             }
         }
 
-        // ---- STORY PLAYBACK : chapter by chapter ----
+        // ---- STORY PLAYBACK : silent TTS, page stays until user clicks Next ----
         function speakStoryChapter() {
+            // In story mode, no automatic advance. We still (silently) speak the chapter
+            // so recording captures timing, but page navigation is manual only.
             if (!isPlaying || isPaused) return;
             if (currentPage >= chapters.length) {
-                if (isLooping) {
-                    currentPage = 0;
-                    updateBookNav();
-                    triggerPageFlip();
-                    stepTimer = setTimeout(speakStoryChapter, 1000);
-                } else {
-                    stopSpeech();
-                }
+                // Stop at last page — no loop in story mode unless user manually navigates
+                stopSpeech();
                 return;
             }
 
             const chapter = chapters[currentPage];
-
-            // (Optional, silent) TTS still runs to keep voices / timing hooks working.
-            // The reading time is driven by the configurable slider, not the TTS.
             const utterance = new SpeechSynthesisUtterance(chapter.text);
             utterance.lang = chapter.lang;
             const voices = synth.getVoices();
@@ -1584,28 +1572,7 @@
             utterance.onerror = () => {};
             synth.speak(utterance);
 
-            sentenceStartTime = Date.now();
-            clearStepTimer();
-
-            // Stay on this chapter for the configured reading time
-            stepTimer = setTimeout(() => {
-                if (!isPlaying || isPaused) return;
-                currentPage++;
-                if (currentPage >= chapters.length) {
-                    if (isLooping) {
-                        currentPage = 0;
-                        updateBookNav();
-                        triggerPageFlip();
-                        stepTimer = setTimeout(speakStoryChapter, 800);
-                    } else {
-                        stopSpeech();
-                    }
-                    return;
-                }
-                updateBookNav();
-                triggerPageFlip();
-                speakStoryChapter();
-            }, readingTimePerChapterMs);
+            // NO stepTimer that advances pages. The page stays until user clicks ◀ ▶.
         }
 
         // ---- CLASSIC PLAYBACK : line by line ----
@@ -1629,9 +1596,7 @@
             utterance.rate = 0.95;
             utterance.pitch = 1.0;
 
-            sentenceDurationMs = DISPLAY_DURATION_MS;
             sentenceStartTime = Date.now();
-
             clearStepTimer();
 
             utterance.onend = () => {};
@@ -1666,12 +1631,12 @@
             isPaused = false;
 
             if (isStoryMode) {
-                // Start from current page (or 0 if out of range)
                 if (currentPage >= chapters.length) currentPage = 0;
                 document.getElementById('playBtn').style.display = 'none';
                 document.getElementById('pauseBtn').style.display = 'flex';
                 document.getElementById('pauseBtn').innerText = "⏸ Pause";
                 speakStoryChapter();
+                setStatus('▶ Lecture en mode manuel : cliquez sur Page suivante ▶', 'info');
             } else {
                 currentIndex = 0;
                 repeatCounter = 0;
@@ -1694,30 +1659,11 @@
                 document.getElementById('pauseBtn').innerText = "⏸ Pause";
                 if (synth.paused) synth.resume();
 
-                const elapsed = Date.now() - sentenceStartTime;
-
                 if (isStoryMode) {
-                    const remaining = Math.max(50, readingTimePerChapterMs - elapsed);
-                    clearStepTimer();
-                    stepTimer = setTimeout(() => {
-                        if (!isPlaying || isPaused) return;
-                        currentPage++;
-                        if (currentPage >= chapters.length) {
-                            if (isLooping) {
-                                currentPage = 0;
-                                updateBookNav();
-                                triggerPageFlip();
-                                stepTimer = setTimeout(speakStoryChapter, 800);
-                            } else {
-                                stopSpeech();
-                            }
-                            return;
-                        }
-                        updateBookNav();
-                        triggerPageFlip();
-                        speakStoryChapter();
-                    }, remaining);
+                    // Story mode resumes silently — no auto-advance
+                    speakStoryChapter();
                 } else {
+                    const elapsed = Date.now() - sentenceStartTime;
                     const remaining = Math.max(50, DISPLAY_DURATION_MS - elapsed);
                     const currentItem = sentenceData[currentIndex];
                     clearStepTimer();
@@ -1888,7 +1834,6 @@
             }
             document.getElementById('camSizeVal').textContent = camSize;
             document.getElementById('textColorInput').value = textColor;
-            updateReadingTimeLabel();
         });
 
         window.addEventListener('beforeunload', () => {
