@@ -340,7 +340,7 @@
             letter-spacing: 0.5px;
         }
 
-        /* Book page flip animation */
+        /* Page flip animation */
         .flip-anim {
             animation: pageFlip 0.35s ease-out;
         }
@@ -350,7 +350,6 @@
             100% { transform: perspective(1200px) rotateY(0deg); opacity: 1; }
         }
 
-        /* Hide story nav when not in story mode */
         #bookNav { display: none; }
         #bookNav.visible { display: flex; }
     </style>
@@ -363,9 +362,9 @@
     </div>
 
     <div class="input-section">
-        <textarea id="textInput" placeholder="Collez votre histoire ici (5 phrases par page)&#10;Ligne 1 : Anglais&#10;Ligne 2 : Français&#10;Ligne 3 : Anglais...&#10;&#10;En mode STORY, chaque page affiche 5 phrases (alternance EN/FR).&#10;Utilisez les boutons ◀ ▶ pour tourner les pages comme un livre."></textarea>
+        <textarea id="textInput" placeholder="Collez votre histoire ici.&#10;Séparez chaque chapitre/paragraphe par une ligne vide (double retour à la ligne).&#10;&#10;Exemple :&#10;Chapter 1: The Beginning&#10;Once upon a time...&#10;&#10;Chapitre 2 : La suite&#10;Il était une fois...&#10;&#10;En mode STORY, chaque chapitre s'affiche sur une page complète du livre."></textarea>
         <div class="controls">
-            <button id="loadBtn" onclick="processText()">1. Charger la liste</button>
+            <button id="loadBtn" onclick="processText()">1. Charger l'histoire</button>
             <button id="playBtn" onclick="startPlayAll()" disabled>▶ Lire tout</button>
             <button id="pauseBtn" onclick="togglePause()">⏸ Pause</button>
             <button id="stopBtn" onclick="stopSpeech()">⏹ Arrêter</button>
@@ -375,7 +374,7 @@
             <button id="storyModeBtn" onclick="toggleStoryMode()">📖 STORY : OFF</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
-        <div class="mute-note">🔇 TTS désactivé · 3s par phrase · Mode STORY : 5 phrases par page · Format livre</div>
+        <div class="mute-note">🔇 TTS désactivé · Mode STORY : 1 chapitre/paragraphe par page · Format livre</div>
     </div>
 
     <div class="options-bar">
@@ -452,7 +451,6 @@
         </label>
     </div>
 
-    <!-- Book page navigation (visible only in story mode) -->
     <div class="book-nav" id="bookNav">
         <button id="prevPageBtn" onclick="prevPage()" disabled>◀ Page précédente</button>
         <span class="page-indicator" id="pageIndicator">Page 1 / 1</span>
@@ -474,7 +472,8 @@
     <script>
         // ==================== ÉTAT GLOBAL ====================
         const synth = window.speechSynthesis;
-        let sentenceData = [];
+        let sentenceData = [];          // for classic mode
+        let chapters = [];              // for story mode : array of { title, text, lang, isEnglish }
         let currentIndex = 0;
         let repeatCounter = 0;
         let isPlaying = false;
@@ -483,8 +482,7 @@
 
         // STORY MODE (book)
         let isStoryMode = false;
-        let currentPage = 0;
-        const SENTENCES_PER_PAGE = 5;
+        let currentPage = 0;            // chapter index
         let totalPages = 1;
 
         // Text color
@@ -534,23 +532,14 @@
             short:   { width: 720,  height: 1280, label: 'Short 9:16'   }
         };
 
-        // ===== Caméra : position RÉELLE (rendue) =====
-        let camX = 0;
-        let camY = 0;
-        let camRadius = 160;
-
-        // ===== Caméra : position CIBLE (souris/doigt) =====
-        let camTargetX = 0;
-        let camTargetY = 0;
-        let camTargetRadius = 160;
+        let camX = 0, camY = 0, camRadius = 160;
+        let camTargetX = 0, camTargetY = 0, camTargetRadius = 160;
 
         let isDragging = false;
-        let dragOffsetX = 0;
-        let dragOffsetY = 0;
+        let dragOffsetX = 0, dragOffsetY = 0;
         let hasDraggedOnce = false;
         let isResizing = false;
-        let resizeStartDist = 0;
-        let resizeStartRadius = 0;
+        let resizeStartDist = 0, resizeStartRadius = 0;
 
         let selfieSegmentation = null;
         let segmentationReady = false;
@@ -561,19 +550,16 @@
         let compositeCtx = compositeCanvas.getContext('2d');
         let lastSegmentationResult = null;
 
-        // ===== Buffers réutilisables =====
         const _bgTmp = document.createElement('canvas');
         const _bgTmpCtx = _bgTmp.getContext('2d');
         const _maskTmp = document.createElement('canvas');
         const _maskTmpCtx = _maskTmp.getContext('2d');
 
-        // ===== Canvas downscalé pour l'inférence (256×256) =====
         const _segInput = document.createElement('canvas');
         _segInput.width = 256;
         _segInput.height = 256;
         const _segInputCtx = _segInput.getContext('2d');
 
-        // ===== Throttle du compositing =====
         let _lastCompositeTime = 0;
 
         function setStatus(msg, type = '') {
@@ -1046,19 +1032,19 @@
             return lum > 0.6;
         }
 
-        // ========== BOOK PAGE DRAWING (no EN/FR badges) ==========
+        // ========== CHAPTER / BOOK PAGE DRAWING ==========
+        // Displays one chapter per page with word-wrapping across full width.
         function drawBookPageOnBoard() {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
             const isLight = isLightColor(boardColor);
             const isPortrait = H > W;
 
-            const startIdx = currentPage * SENTENCES_PER_PAGE;
-            const pageSentences = sentenceData.slice(startIdx, startIdx + SENTENCES_PER_PAGE);
+            const chapter = chapters[currentPage];
             const pageNum = currentPage + 1;
-            const totalPg = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
+            const totalPg = Math.max(1, chapters.length);
 
-            // Book page look : left spine shadow
+            // Book spine shadow
             const spineWidth = isPortrait ? 18 : 26;
             const gradient = boardCtx.createLinearGradient(0, 0, spineWidth, 0);
             gradient.addColorStop(0, 'rgba(0,0,0,0.35)');
@@ -1066,14 +1052,14 @@
             boardCtx.fillStyle = gradient;
             boardCtx.fillRect(0, 0, spineWidth, H);
 
-            // Page number at bottom center
+            // Page number
             boardCtx.font = `bold ${isPortrait ? 18 : 22}px "Segoe UI", sans-serif`;
             boardCtx.textAlign = 'center';
             boardCtx.textBaseline = 'bottom';
             boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)';
-            boardCtx.fillText(`— ${pageNum} —`, W / 2, H - 25);
+            boardCtx.fillText(`— ${pageNum} / ${totalPg} —`, W / 2, H - 25);
 
-            if (pageSentences.length === 0) {
+            if (!chapter || !chapter.text) {
                 boardCtx.font = `italic ${isPortrait ? 26 : 32}px "Segoe UI", sans-serif`;
                 boardCtx.textAlign = 'center';
                 boardCtx.textBaseline = 'middle';
@@ -1082,47 +1068,64 @@
                 return;
             }
 
-            // Book layout
+            // Layout margins
             const paddingTop = isPortrait ? 70 : 60;
             const paddingBottom = isPortrait ? 90 : 100;
             const paddingLeft = isPortrait ? 50 : 80;
             const paddingRight = isPortrait ? 50 : 80;
-            const availableHeight = H - paddingTop - paddingBottom;
-            const lineSpacing = availableHeight / SENTENCES_PER_PAGE;
-
-            const baseFontSize = isPortrait ? 26 : 32;
             const maxWidth = W - paddingLeft - paddingRight;
+            const contentHeight = H - paddingTop - paddingBottom;
 
-            pageSentences.forEach((item, i) => {
-                const y = paddingTop + lineSpacing * i + lineSpacing / 2;
+            // Font sizing – auto shrink to fit the whole chapter
+            let baseFontSize = isPortrait ? 28 : 34;
+            const lineHeightFactor = 1.45;
+            let lines = [];
 
-                // Active highlight bar during playback
-                if (isPlaying && currentIndex === startIdx + i) {
-                    boardCtx.fillStyle = 'rgba(108, 92, 231, 0.18)';
-                    drawRoundRect(boardCtx, paddingLeft - 14, y - lineSpacing / 2 + 6, maxWidth + 28, lineSpacing - 12, 8);
-                    boardCtx.fill();
-                }
-
-                // Sentence text (book style, no badges)
-                boardCtx.font = `bold ${baseFontSize}px "Segoe UI", sans-serif`;
-                boardCtx.textAlign = 'left';
-                boardCtx.textBaseline = 'middle';
-                boardCtx.fillStyle = textColor;
-
-                let displayText = item.text;
-                if (boardCtx.measureText(displayText).width > maxWidth) {
-                    while (displayText.length > 0 && boardCtx.measureText(displayText + '…').width > maxWidth) {
-                        displayText = displayText.slice(0, -1);
+            function wrapText(text, fontSize) {
+                boardCtx.font = `600 ${fontSize}px "Segoe UI", sans-serif`;
+                const words = text.split(/\s+/);
+                const out = [];
+                let cur = '';
+                for (const w of words) {
+                    const test = cur ? cur + ' ' + w : w;
+                    if (boardCtx.measureText(test).width > maxWidth && cur) {
+                        out.push(cur);
+                        cur = w;
+                    } else {
+                        cur = test;
                     }
-                    displayText += '…';
                 }
+                if (cur) out.push(cur);
+                return out;
+            }
 
-                boardCtx.fillText(displayText, paddingLeft, y);
+            // Shrink font until all lines fit vertically
+            let attempts = 0;
+            while (attempts < 20) {
+                lines = wrapText(chapter.text, baseFontSize);
+                const totalH = lines.length * baseFontSize * lineHeightFactor;
+                if (totalH <= contentHeight || baseFontSize <= 12) break;
+                baseFontSize -= 2;
+                attempts++;
+            }
+
+            const lineHeight = baseFontSize * lineHeightFactor;
+            const totalTextHeight = lines.length * lineHeight;
+            // Center block vertically inside content area
+            const startY = paddingTop + Math.max(0, (contentHeight - totalTextHeight) / 2) + lineHeight * 0.8;
+
+            boardCtx.font = `600 ${baseFontSize}px "Segoe UI", sans-serif`;
+            boardCtx.textAlign = 'left';
+            boardCtx.textBaseline = 'alphabetic';
+            boardCtx.fillStyle = textColor;
+
+            lines.forEach((line, i) => {
+                boardCtx.fillText(line, paddingLeft, startY + i * lineHeight);
             });
 
-            // Progress bar during playback
+            // Progress bar during playback (based on sentence index within chapters)
             if (isPlaying) {
-                const progress = (currentIndex + (repeatCounter / (sentenceData[currentIndex]?.maxRepeats || 1))) / Math.max(1, sentenceData.length);
+                const globalProgress = (currentIndex + (repeatCounter / (sentenceData[currentIndex]?.maxRepeats || 1))) / Math.max(1, sentenceData.length);
                 const barWidth = W * 0.5;
                 const barX = (W - barWidth) / 2;
                 const barY = H - 60;
@@ -1130,7 +1133,7 @@
                 drawRoundRect(boardCtx, barX, barY, barWidth, 6, 3);
                 boardCtx.fill();
                 boardCtx.fillStyle = '#6c5ce7';
-                drawRoundRect(boardCtx, barX, barY, barWidth * Math.min(progress, 1), 6, 3);
+                drawRoundRect(boardCtx, barX, barY, barWidth * Math.min(globalProgress, 1), 6, 3);
                 boardCtx.fill();
             }
         }
@@ -1380,7 +1383,7 @@
             animationFrameId = requestAnimationFrame(render);
         }
 
-        // ==================== STORY MODE TOGGLE (book) ====================
+        // ==================== STORY MODE TOGGLE ====================
         function toggleStoryMode() {
             isStoryMode = !isStoryMode;
             const btn = document.getElementById('storyModeBtn');
@@ -1390,12 +1393,12 @@
                 btn.classList.add('active');
                 btn.innerText = '📖 STORY : ON';
                 bookNav.classList.add('visible');
-                if (sentenceData.length > 0) {
-                    totalPages = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
+                if (chapters.length > 0) {
+                    totalPages = Math.max(1, chapters.length);
                     currentPage = 0;
                     updateBookNav();
                 }
-                setStatus('📖 Mode STORY (livre) : 5 phrases par page', 'info');
+                setStatus('📖 Mode STORY (livre) : 1 chapitre par page', 'info');
             } else {
                 btn.classList.remove('active');
                 btn.innerText = '📖 STORY : OFF';
@@ -1405,7 +1408,7 @@
         }
 
         function updateBookNav() {
-            const totalPg = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
+            const totalPg = Math.max(1, chapters.length);
             const pageIndicator = document.getElementById('pageIndicator');
             const prevBtn = document.getElementById('prevPageBtn');
             const nextBtn = document.getElementById('nextPageBtn');
@@ -1431,7 +1434,7 @@
         }
 
         function nextPage() {
-            const totalPg = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
+            const totalPg = Math.max(1, chapters.length);
             if (currentPage < totalPg - 1) {
                 currentPage++;
                 updateBookNav();
@@ -1441,9 +1444,43 @@
         }
 
         // ==================== TTS ====================
+        // For story mode we split each chapter into sentences to play sequentially,
+        // but display the whole chapter on its page.
+        function splitIntoSentences(text) {
+            // Split on . ! ? followed by space or end. Keep the punctuation.
+            return text
+                .replace(/\s+/g, ' ')
+                .match(/[^.!?]+[.!?]+|[^.!?]+$/g)
+                ?.map(s => s.trim())
+                .filter(s => s.length > 0) || [text.trim()];
+        }
+
+        function buildChapters(rawText) {
+            // Chapters separated by blank lines (one or more)
+            const blocks = rawText
+                .replace(/\r\n/g, '\n')
+                .split(/\n\s*\n+/)
+                .map(b => b.trim())
+                .filter(b => b.length > 0);
+
+            const result = [];
+            blocks.forEach((block, i) => {
+                const isEnglish = i % 2 === 0;
+                result.push({
+                    title: `Chapitre ${i + 1}`,
+                    text: block,
+                    lang: isEnglish ? 'en-US' : 'fr-FR',
+                    isEnglish: isEnglish
+                });
+            });
+            return result;
+        }
+
         function processText() {
             stopSpeech();
             const input = document.getElementById('textInput').value;
+
+            // Classic mode data : line by line
             const lines = input.split('\n').map(l => l.trim()).filter(l => l !== "");
             sentenceData = [];
             lines.forEach((line, index) => {
@@ -1455,13 +1492,25 @@
                     maxRepeats: isEnglish ? 3 : 2
                 });
             });
-            if (sentenceData.length > 0) {
+
+            // Story mode data : chapter by chapter
+            chapters = buildChapters(input);
+
+            // Build a flat list of sentence "items" for the TTS engine
+            // in story mode. Each sentence carries its chapter index so we can
+            // sync the displayed page.
+            // We'll create a separate structure when starting playback in story mode.
+            // For now, store sentenceData for classic mode.
+
+            if (sentenceData.length > 0 || chapters.length > 0) {
                 document.getElementById('playBtn').disabled = false;
                 document.getElementById('recordBtn').disabled = false;
-                setStatus(`✅ Liste chargée : ${sentenceData.length} lignes · 3s par phrase`, 'success');
+
+                const msg = `✅ Chargé : ${sentenceData.length} lignes (classique) · ${chapters.length} chapitres (story)`;
+                setStatus(msg, 'success');
 
                 if (isStoryMode) {
-                    totalPages = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
+                    totalPages = Math.max(1, chapters.length);
                     currentPage = 0;
                     updateBookNav();
                 }
@@ -1470,7 +1519,7 @@
             } else {
                 document.getElementById('playBtn').disabled = true;
                 document.getElementById('recordBtn').disabled = true;
-                setStatus('Aucune ligne valide', 'error');
+                setStatus('Aucun contenu valide', 'error');
             }
         }
 
@@ -1481,6 +1530,74 @@
             }
         }
 
+        // ---- Story playback engine ----
+        // We build a list of "utterances" from chapters, each with the chapter index
+        // and the sentence text. We track a separate story index.
+        let storyPlaylist = [];       // array of { text, lang, chapterIndex, sentenceIndexInChapter }
+        let storyIndex = 0;           // current item in storyPlaylist
+
+        function buildStoryPlaylist() {
+            storyPlaylist = [];
+            chapters.forEach((ch, ci) => {
+                const sentences = splitIntoSentences(ch.text);
+                sentences.forEach((s, si) => {
+                    storyPlaylist.push({
+                        text: s,
+                        lang: ch.lang,
+                        chapterIndex: ci,
+                        sentenceIndexInChapter: si
+                    });
+                });
+            });
+        }
+
+        function speakStoryStep() {
+            if (!isPlaying || isPaused) return;
+            if (storyIndex >= storyPlaylist.length) {
+                if (isLooping) {
+                    storyIndex = 0;
+                    currentPage = 0;
+                    updateBookNav();
+                    triggerPageFlip();
+                    stepTimer = setTimeout(speakStoryStep, 1000);
+                } else stopSpeech();
+                return;
+            }
+
+            const item = storyPlaylist[storyIndex];
+
+            // Sync displayed page to the chapter of this sentence
+            if (item.chapterIndex !== currentPage) {
+                currentPage = item.chapterIndex;
+                updateBookNav();
+                triggerPageFlip();
+            }
+
+            const utterance = new SpeechSynthesisUtterance(item.text);
+            utterance.lang = item.lang;
+            const voices = synth.getVoices();
+            const voice = voices.find(v => v.lang.startsWith(item.lang));
+            if (voice) utterance.voice = voice;
+            utterance.volume = 0.0;
+            utterance.rate = 0.95;
+            utterance.pitch = 1.0;
+
+            sentenceStartTime = Date.now();
+            clearStepTimer();
+
+            utterance.onend = () => {};
+            utterance.onerror = (e) => { console.warn('TTS:', e); };
+
+            synth.speak(utterance);
+
+            stepTimer = setTimeout(() => {
+                if (!isPlaying || isPaused) return;
+                storyIndex++;
+                speakStoryStep();
+            }, DISPLAY_DURATION_MS);
+        }
+
+        // ---- Classic playback engine (single lines) ----
         function speakStep() {
             if (!isPlaying || isPaused) return;
             if (currentIndex >= sentenceData.length) {
@@ -1511,16 +1628,6 @@
 
             synth.speak(utterance);
 
-            // In story mode, follow the page of the playing sentence
-            if (isStoryMode) {
-                const newPage = Math.floor(currentIndex / SENTENCES_PER_PAGE);
-                if (newPage !== currentPage) {
-                    currentPage = newPage;
-                    updateBookNav();
-                    triggerPageFlip();
-                }
-            }
-
             stepTimer = setTimeout(() => {
                 if (!isPlaying) return;
                 if (isPaused) return;
@@ -1536,23 +1643,40 @@
         }
 
         function startPlayAll() {
-            if (sentenceData.length === 0) return;
+            if (isStoryMode) {
+                if (chapters.length === 0) return;
+            } else {
+                if (sentenceData.length === 0) return;
+            }
+
             synth.cancel();
             clearStepTimer();
             isPlaying = true;
             isPaused = false;
-            currentIndex = 0;
-            repeatCounter = 0;
 
             if (isStoryMode) {
-                currentIndex = currentPage * SENTENCES_PER_PAGE;
-                if (currentIndex >= sentenceData.length) currentIndex = 0;
+                buildStoryPlaylist();
+                // Start from the current chapter's first sentence
+                storyIndex = 0;
+                // Find first sentence of current chapter
+                for (let i = 0; i < storyPlaylist.length; i++) {
+                    if (storyPlaylist[i].chapterIndex === currentPage) {
+                        storyIndex = i;
+                        break;
+                    }
+                }
+                document.getElementById('playBtn').style.display = 'none';
+                document.getElementById('pauseBtn').style.display = 'flex';
+                document.getElementById('pauseBtn').innerText = "⏸ Pause";
+                speakStoryStep();
+            } else {
+                currentIndex = 0;
+                repeatCounter = 0;
+                document.getElementById('playBtn').style.display = 'none';
+                document.getElementById('pauseBtn').style.display = 'flex';
+                document.getElementById('pauseBtn').innerText = "⏸ Pause";
+                speakStep();
             }
-
-            document.getElementById('playBtn').style.display = 'none';
-            document.getElementById('pauseBtn').style.display = 'flex';
-            document.getElementById('pauseBtn').innerText = "⏸ Pause";
-            speakStep();
         }
 
         function togglePause() {
@@ -1566,16 +1690,29 @@
                 isPaused = false;
                 document.getElementById('pauseBtn').innerText = "⏸ Pause";
                 if (synth.paused) synth.resume();
-                const elapsed = Date.now() - sentenceStartTime;
-                const remaining = Math.max(50, DISPLAY_DURATION_MS - elapsed);
-                const currentItem = sentenceData[currentIndex];
-                clearStepTimer();
-                stepTimer = setTimeout(() => {
-                    if (!isPlaying || isPaused) return;
-                    repeatCounter++;
-                    if (repeatCounter < currentItem.maxRepeats) speakStep();
-                    else { currentIndex++; repeatCounter = 0; speakStep(); }
-                }, remaining);
+
+                if (isStoryMode) {
+                    // Resume story engine
+                    const elapsed = Date.now() - sentenceStartTime;
+                    const remaining = Math.max(50, DISPLAY_DURATION_MS - elapsed);
+                    clearStepTimer();
+                    stepTimer = setTimeout(() => {
+                        if (!isPlaying || isPaused) return;
+                        storyIndex++;
+                        speakStoryStep();
+                    }, remaining);
+                } else {
+                    const elapsed = Date.now() - sentenceStartTime;
+                    const remaining = Math.max(50, DISPLAY_DURATION_MS - elapsed);
+                    const currentItem = sentenceData[currentIndex];
+                    clearStepTimer();
+                    stepTimer = setTimeout(() => {
+                        if (!isPlaying || isPaused) return;
+                        repeatCounter++;
+                        if (repeatCounter < currentItem.maxRepeats) speakStep();
+                        else { currentIndex++; repeatCounter = 0; speakStep(); }
+                    }, remaining);
+                }
             }
         }
 
@@ -1585,7 +1722,9 @@
             clearStepTimer();
             synth.cancel();
             document.getElementById('playBtn').style.display = 'flex';
-            document.getElementById('playBtn').disabled = (sentenceData.length === 0);
+            document.getElementById('playBtn').disabled = isStoryMode
+                ? (chapters.length === 0)
+                : (sentenceData.length === 0);
             document.getElementById('pauseBtn').style.display = 'none';
         }
 
@@ -1645,7 +1784,9 @@
         }
 
         async function startRecording() {
-            if (sentenceData.length === 0) { setStatus('Chargez d\'abord une liste', 'error'); return; }
+            if (isStoryMode ? chapters.length === 0 : sentenceData.length === 0) {
+                setStatus('Chargez d\'abord un contenu', 'error'); return;
+            }
             if (!cameraReady) { await initCamera(); await new Promise(r => setTimeout(r, 800)); }
 
             setStatus('🎤 Demande d\'accès au micro...', 'info');
