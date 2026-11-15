@@ -352,6 +352,26 @@
 
         #bookNav { display: none; }
         #bookNav.visible { display: flex; }
+
+        /* Reading time control */
+        .reading-time-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .reading-time-group input[type="range"] {
+            width: 130px;
+        }
+        #readingTimeVal {
+            font-weight: 700;
+            color: var(--accent);
+            min-width: 42px;
+            font-size: 13px;
+        }
+        .reading-time-group small {
+            color: #888;
+            font-size: 11px;
+        }
     </style>
 </head>
 <body>
@@ -374,7 +394,7 @@
             <button id="storyModeBtn" onclick="toggleStoryMode()">📖 STORY : OFF</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
-        <div class="mute-note">🔇 TTS désactivé · Mode STORY : 1 chapitre/paragraphe par page · Format livre</div>
+        <div class="mute-note">🔇 TTS désactivé · Mode STORY : 1 chapitre par page · Temps de lecture ajustable</div>
     </div>
 
     <div class="options-bar">
@@ -406,6 +426,13 @@
                 <div class="swatch" data-color="#55efc4" style="background:#55efc4" title="Menthe"></div>
                 <div class="swatch" data-color="#ffffff" style="background:#ffffff;border:1px solid #ccc" title="Blanc"></div>
             </div>
+        </label>
+
+        <!-- NEW: Reading time per chapter -->
+        <label class="reading-time-group">⏱️ Temps lecture :
+            <input type="range" id="readingTimeSlider" min="3" max="60" value="12" step="1">
+            <span id="readingTimeVal">12 s</span>
+            <small>par chapitre</small>
         </label>
 
         <label>🖼️ Cadre :
@@ -485,10 +512,13 @@
         let currentPage = 0;            // chapter index
         let totalPages = 1;
 
+        // Reading time (in ms) for each chapter page during playback
+        let readingTimePerChapterMs = 12000;   // 12s default
+
         // Text color
         let textColor = '#ff6b6b';
 
-        const DISPLAY_DURATION_MS = 3000;
+        const DISPLAY_DURATION_MS = 3000;      // classic mode sentence display
 
         const boardCanvas = document.getElementById('boardCanvas');
         const boardCtx = boardCanvas.getContext('2d');
@@ -998,6 +1028,20 @@
             camSizeVal.textContent = camSize;
         });
 
+        // ===== Reading time slider =====
+        const readingTimeSlider = document.getElementById('readingTimeSlider');
+        const readingTimeVal = document.getElementById('readingTimeVal');
+        function updateReadingTimeLabel() {
+            readingTimeVal.textContent = readingTimeSlider.value + ' s';
+        }
+        readingTimeSlider.addEventListener('input', (e) => {
+            const seconds = parseInt(e.target.value, 10);
+            readingTimePerChapterMs = seconds * 1000;
+            updateReadingTimeLabel();
+            setStatus(`⏱️ Temps de lecture : ${seconds} s par chapitre`, 'info');
+        });
+        updateReadingTimeLabel();
+
         // ==================== RENDU ====================
         function drawBoardBackground() {
             const W = boardCanvas.width;
@@ -1033,7 +1077,6 @@
         }
 
         // ========== CHAPTER / BOOK PAGE DRAWING ==========
-        // Displays one chapter per page with word-wrapping across full width.
         function drawBookPageOnBoard() {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -1099,7 +1142,6 @@
                 return out;
             }
 
-            // Shrink font until all lines fit vertically
             let attempts = 0;
             while (attempts < 20) {
                 lines = wrapText(chapter.text, baseFontSize);
@@ -1111,7 +1153,6 @@
 
             const lineHeight = baseFontSize * lineHeightFactor;
             const totalTextHeight = lines.length * lineHeight;
-            // Center block vertically inside content area
             const startY = paddingTop + Math.max(0, (contentHeight - totalTextHeight) / 2) + lineHeight * 0.8;
 
             boardCtx.font = `600 ${baseFontSize}px "Segoe UI", sans-serif`;
@@ -1123,9 +1164,9 @@
                 boardCtx.fillText(line, paddingLeft, startY + i * lineHeight);
             });
 
-            // Progress bar during playback (based on sentence index within chapters)
+            // Progress bar during playback (based on chapter page)
             if (isPlaying) {
-                const globalProgress = (currentIndex + (repeatCounter / (sentenceData[currentIndex]?.maxRepeats || 1))) / Math.max(1, sentenceData.length);
+                const progress = (currentPage + 1) / Math.max(1, chapters.length);
                 const barWidth = W * 0.5;
                 const barX = (W - barWidth) / 2;
                 const barY = H - 60;
@@ -1133,7 +1174,7 @@
                 drawRoundRect(boardCtx, barX, barY, barWidth, 6, 3);
                 boardCtx.fill();
                 boardCtx.fillStyle = '#6c5ce7';
-                drawRoundRect(boardCtx, barX, barY, barWidth * Math.min(globalProgress, 1), 6, 3);
+                drawRoundRect(boardCtx, barX, barY, barWidth * Math.min(progress, 1), 6, 3);
                 boardCtx.fill();
             }
         }
@@ -1443,20 +1484,10 @@
             }
         }
 
-        // ==================== TTS ====================
-        // For story mode we split each chapter into sentences to play sequentially,
-        // but display the whole chapter on its page.
-        function splitIntoSentences(text) {
-            // Split on . ! ? followed by space or end. Keep the punctuation.
-            return text
-                .replace(/\s+/g, ' ')
-                .match(/[^.!?]+[.!?]+|[^.!?]+$/g)
-                ?.map(s => s.trim())
-                .filter(s => s.length > 0) || [text.trim()];
-        }
-
+        // ==================== TTS & PLAYBACK ====================
+        // Classic mode keeps line-by-line speech.
+        // Story mode advances chapter by chapter with a configurable reading time.
         function buildChapters(rawText) {
-            // Chapters separated by blank lines (one or more)
             const blocks = rawText
                 .replace(/\r\n/g, '\n')
                 .split(/\n\s*\n+/)
@@ -1480,7 +1511,6 @@
             stopSpeech();
             const input = document.getElementById('textInput').value;
 
-            // Classic mode data : line by line
             const lines = input.split('\n').map(l => l.trim()).filter(l => l !== "");
             sentenceData = [];
             lines.forEach((line, index) => {
@@ -1493,14 +1523,7 @@
                 });
             });
 
-            // Story mode data : chapter by chapter
             chapters = buildChapters(input);
-
-            // Build a flat list of sentence "items" for the TTS engine
-            // in story mode. Each sentence carries its chapter index so we can
-            // sync the displayed page.
-            // We'll create a separate structure when starting playback in story mode.
-            // For now, store sentenceData for classic mode.
 
             if (sentenceData.length > 0 || chapters.length > 0) {
                 document.getElementById('playBtn').disabled = false;
@@ -1530,74 +1553,62 @@
             }
         }
 
-        // ---- Story playback engine ----
-        // We build a list of "utterances" from chapters, each with the chapter index
-        // and the sentence text. We track a separate story index.
-        let storyPlaylist = [];       // array of { text, lang, chapterIndex, sentenceIndexInChapter }
-        let storyIndex = 0;           // current item in storyPlaylist
-
-        function buildStoryPlaylist() {
-            storyPlaylist = [];
-            chapters.forEach((ch, ci) => {
-                const sentences = splitIntoSentences(ch.text);
-                sentences.forEach((s, si) => {
-                    storyPlaylist.push({
-                        text: s,
-                        lang: ch.lang,
-                        chapterIndex: ci,
-                        sentenceIndexInChapter: si
-                    });
-                });
-            });
-        }
-
-        function speakStoryStep() {
+        // ---- STORY PLAYBACK : chapter by chapter ----
+        function speakStoryChapter() {
             if (!isPlaying || isPaused) return;
-            if (storyIndex >= storyPlaylist.length) {
+            if (currentPage >= chapters.length) {
                 if (isLooping) {
-                    storyIndex = 0;
                     currentPage = 0;
                     updateBookNav();
                     triggerPageFlip();
-                    stepTimer = setTimeout(speakStoryStep, 1000);
-                } else stopSpeech();
+                    stepTimer = setTimeout(speakStoryChapter, 1000);
+                } else {
+                    stopSpeech();
+                }
                 return;
             }
 
-            const item = storyPlaylist[storyIndex];
+            const chapter = chapters[currentPage];
 
-            // Sync displayed page to the chapter of this sentence
-            if (item.chapterIndex !== currentPage) {
-                currentPage = item.chapterIndex;
-                updateBookNav();
-                triggerPageFlip();
-            }
-
-            const utterance = new SpeechSynthesisUtterance(item.text);
-            utterance.lang = item.lang;
+            // (Optional, silent) TTS still runs to keep voices / timing hooks working.
+            // The reading time is driven by the configurable slider, not the TTS.
+            const utterance = new SpeechSynthesisUtterance(chapter.text);
+            utterance.lang = chapter.lang;
             const voices = synth.getVoices();
-            const voice = voices.find(v => v.lang.startsWith(item.lang));
+            const voice = voices.find(v => v.lang.startsWith(chapter.lang));
             if (voice) utterance.voice = voice;
             utterance.volume = 0.0;
             utterance.rate = 0.95;
             utterance.pitch = 1.0;
+            utterance.onend = () => {};
+            utterance.onerror = () => {};
+            synth.speak(utterance);
 
             sentenceStartTime = Date.now();
             clearStepTimer();
 
-            utterance.onend = () => {};
-            utterance.onerror = (e) => { console.warn('TTS:', e); };
-
-            synth.speak(utterance);
-
+            // Stay on this chapter for the configured reading time
             stepTimer = setTimeout(() => {
                 if (!isPlaying || isPaused) return;
-                storyIndex++;
-                speakStoryStep();
-            }, DISPLAY_DURATION_MS);
+                currentPage++;
+                if (currentPage >= chapters.length) {
+                    if (isLooping) {
+                        currentPage = 0;
+                        updateBookNav();
+                        triggerPageFlip();
+                        stepTimer = setTimeout(speakStoryChapter, 800);
+                    } else {
+                        stopSpeech();
+                    }
+                    return;
+                }
+                updateBookNav();
+                triggerPageFlip();
+                speakStoryChapter();
+            }, readingTimePerChapterMs);
         }
 
-        // ---- Classic playback engine (single lines) ----
+        // ---- CLASSIC PLAYBACK : line by line ----
         function speakStep() {
             if (!isPlaying || isPaused) return;
             if (currentIndex >= sentenceData.length) {
@@ -1655,20 +1666,12 @@
             isPaused = false;
 
             if (isStoryMode) {
-                buildStoryPlaylist();
-                // Start from the current chapter's first sentence
-                storyIndex = 0;
-                // Find first sentence of current chapter
-                for (let i = 0; i < storyPlaylist.length; i++) {
-                    if (storyPlaylist[i].chapterIndex === currentPage) {
-                        storyIndex = i;
-                        break;
-                    }
-                }
+                // Start from current page (or 0 if out of range)
+                if (currentPage >= chapters.length) currentPage = 0;
                 document.getElementById('playBtn').style.display = 'none';
                 document.getElementById('pauseBtn').style.display = 'flex';
                 document.getElementById('pauseBtn').innerText = "⏸ Pause";
-                speakStoryStep();
+                speakStoryChapter();
             } else {
                 currentIndex = 0;
                 repeatCounter = 0;
@@ -1691,18 +1694,30 @@
                 document.getElementById('pauseBtn').innerText = "⏸ Pause";
                 if (synth.paused) synth.resume();
 
+                const elapsed = Date.now() - sentenceStartTime;
+
                 if (isStoryMode) {
-                    // Resume story engine
-                    const elapsed = Date.now() - sentenceStartTime;
-                    const remaining = Math.max(50, DISPLAY_DURATION_MS - elapsed);
+                    const remaining = Math.max(50, readingTimePerChapterMs - elapsed);
                     clearStepTimer();
                     stepTimer = setTimeout(() => {
                         if (!isPlaying || isPaused) return;
-                        storyIndex++;
-                        speakStoryStep();
+                        currentPage++;
+                        if (currentPage >= chapters.length) {
+                            if (isLooping) {
+                                currentPage = 0;
+                                updateBookNav();
+                                triggerPageFlip();
+                                stepTimer = setTimeout(speakStoryChapter, 800);
+                            } else {
+                                stopSpeech();
+                            }
+                            return;
+                        }
+                        updateBookNav();
+                        triggerPageFlip();
+                        speakStoryChapter();
                     }, remaining);
                 } else {
-                    const elapsed = Date.now() - sentenceStartTime;
                     const remaining = Math.max(50, DISPLAY_DURATION_MS - elapsed);
                     const currentItem = sentenceData[currentIndex];
                     clearStepTimer();
@@ -1873,6 +1888,7 @@
             }
             document.getElementById('camSizeVal').textContent = camSize;
             document.getElementById('textColorInput').value = textColor;
+            updateReadingTimeLabel();
         });
 
         window.addEventListener('beforeunload', () => {
