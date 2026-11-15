@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apprentissage Bilingue · Tableau + Caméra Ronde</title>
+    <title>Apprentissage Bilingue · Tableau + Caméra Ronde · Mode Histoire</title>
     <style>
         :root {
             --en-red: #d9534f;
@@ -34,14 +34,14 @@
 
         textarea {
             width: 100%;
-            height: 100px;
+            height: 120px;
             background: #fafafa;
             color: #333;
             border: 1px solid #ddd;
             padding: 15px;
             border-radius: 12px;
             font-size: 16px;
-            resize: none;
+            resize: vertical;
             outline: none;
             font-family: inherit;
         }
@@ -162,6 +162,18 @@
         .format-toggle button.active {
             background: var(--accent);
             color: white;
+        }
+
+        /* Mode STORY toggle */
+        #storyModeBtn {
+            background: #e0e7ff;
+            color: #3730a3;
+            border: 2px solid #c7d2fe;
+        }
+        #storyModeBtn.active {
+            background: #4f46e5;
+            color: white;
+            border-color: #4338ca;
         }
 
         .video-stage {
@@ -289,6 +301,30 @@
             animation: spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        .story-nav {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 10px 0;
+        }
+        .story-nav button {
+            background: #f0f0f0;
+            color: #333;
+            padding: 8px 24px;
+            font-size: 16px;
+        }
+        .story-nav button:disabled {
+            opacity: 0.3;
+        }
+        .page-indicator {
+            display: flex;
+            align-items: center;
+            font-weight: bold;
+            color: #4f46e5;
+            font-size: 15px;
+            padding: 0 10px;
+        }
     </style>
 </head>
 <body>
@@ -299,7 +335,7 @@
     </div>
 
     <div class="input-section">
-        <textarea id="textInput" placeholder="Ligne 1 : Anglais&#10;Ligne 2 : Français&#10;Ligne 3 : Anglais..."></textarea>
+        <textarea id="textInput" placeholder="Collez votre histoire ici (5 phrases par page)&#10;Ligne 1 : Anglais&#10;Ligne 2 : Français&#10;Ligne 3 : Anglais...&#10;&#10;En mode STORY, chaque page affiche 5 phrases (alternance EN/FR).&#10;Utilisez les boutons ◀ ▶ pour changer de page."></textarea>
         <div class="controls">
             <button id="loadBtn" onclick="processText()">1. Charger la liste</button>
             <button id="playBtn" onclick="startPlayAll()" disabled>▶ Lire tout</button>
@@ -308,9 +344,10 @@
             <button id="loopBtn" onclick="toggleLoop()">🔁 Boucle : OFF</button>
             <button id="torchBtn" onclick="toggleTorch()" disabled>🔦 Flash : OFF</button>
             <button id="recordBtn" onclick="toggleRecording()" disabled>⏺ Enregistrer</button>
+            <button id="storyModeBtn" onclick="toggleStoryMode()">📖 STORY : OFF</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
-        <div class="mute-note">🔇 TTS désactivé · Chaque phrase s'affiche 3 secondes · Fond virtuel colorisable</div>
+        <div class="mute-note">🔇 TTS désactivé · Chaque phrase s'affiche 3 secondes · Fond virtuel colorisable · Mode STORY : 5 phrases par page</div>
     </div>
 
     <div class="options-bar">
@@ -329,6 +366,19 @@
                 <div class="swatch" data-color="#2d4a22" style="background:#2d4a22" title="Vert forêt"></div>
                 <div class="swatch" data-color="#4a1e2e" style="background:#4a1e2e" title="Bordeaux"></div>
                 <div class="swatch" data-color="#fdf6e3" style="background:#fdf6e3;border:1px solid #ccc" title="Crème clair"></div>
+            </div>
+        </label>
+
+        <!-- NEW: Text color changer -->
+        <label>✏️ Texte :
+            <input type="color" id="textColorInput" value="#ff6b6b">
+            <div class="swatch-group" id="textSwatches">
+                <div class="swatch active" data-color="#ff6b6b" style="background:#ff6b6b" title="Rouge clair"></div>
+                <div class="swatch" data-color="#4dabf7" style="background:#4dabf7" title="Bleu clair"></div>
+                <div class="swatch" data-color="#feca57" style="background:#feca57" title="Jaune"></div>
+                <div class="swatch" data-color="#a29bfe" style="background:#a29bfe" title="Lavande"></div>
+                <div class="swatch" data-color="#55efc4" style="background:#55efc4" title="Menthe"></div>
+                <div class="swatch" data-color="#ffffff" style="background:#ffffff;border:1px solid #ccc" title="Blanc"></div>
             </div>
         </label>
 
@@ -375,6 +425,13 @@
         </label>
     </div>
 
+    <!-- Story navigation (visible only in story mode) -->
+    <div class="story-nav" id="storyNav" style="display:none;">
+        <button id="prevPageBtn" onclick="prevPage()" disabled>◀ Page précédente</button>
+        <span class="page-indicator" id="pageIndicator">Page 1 / 1</span>
+        <button id="nextPageBtn" onclick="nextPage()" disabled>Page suivante ▶</button>
+    </div>
+
     <div class="video-stage" id="videoStage">
         <canvas id="boardCanvas" width="1280" height="720"></canvas>
         <video id="cameraVideo" autoplay playsinline muted></video>
@@ -396,6 +453,15 @@
         let isPlaying = false;
         let isPaused = false;
         let isLooping = false;
+
+        // STORY MODE
+        let isStoryMode = false;
+        let currentPage = 0;
+        const SENTENCES_PER_PAGE = 5;
+        let totalPages = 1;
+
+        // Text color
+        let textColor = '#ff6b6b';
 
         const DISPLAY_DURATION_MS = 3000;
 
@@ -513,7 +579,6 @@
                 camY = Math.max(camRadius, Math.min(cfg.height - camRadius, camY));
             }
 
-            // Synchroniser les cibles
             camTargetX = camX;
             camTargetY = camY;
             camTargetRadius = camRadius;
@@ -585,7 +650,6 @@
             }
         }
 
-        // ✅ CORRIGÉ : inférence sur 256×256 au lieu de 1280×720
         async function startSegmentationLoop() {
             if (segmentationLoopActive) return;
             segmentationLoopActive = true;
@@ -602,7 +666,6 @@
             loop();
         }
 
-        // ✅ CORRIGÉ : masque aligné + throttle 16ms
         function getCameraWithBackground() {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -611,7 +674,6 @@
                 return videoElement;
             }
 
-            // Throttle : ne recompose pas plus vite que ~60fps
             const now = performance.now();
             if (now - _lastCompositeTime < 16) {
                 return compositeCanvas;
@@ -676,7 +738,6 @@
             try {
                 setStatus('Demande d\'accès à la caméra...', 'info');
                 try {
-                    // ✅ CORRIGÉ : contrainte frameRate pour éviter la chute de FPS
                     cameraStream = await navigator.mediaDevices.getUserMedia({
                         video: {
                             facingMode: 'user',
@@ -790,7 +851,6 @@
                 isDragging = true;
                 dragOffsetX = pos.x - camX;
                 dragOffsetY = pos.y - camY;
-                // ✅ Synchroniser les cibles avec la position réelle
                 camTargetX = camX;
                 camTargetY = camY;
                 boardCanvas.style.cursor = 'grabbing';
@@ -822,7 +882,6 @@
                 let newY = pos.y - dragOffsetY;
                 newX = Math.max(camRadius, Math.min(boardCanvas.width - camRadius, newX));
                 newY = Math.max(camRadius, Math.min(boardCanvas.height - camRadius, newY));
-                // ✅ Écrire dans les CIBLES, pas dans les positions rendues
                 camTargetX = newX;
                 camTargetY = newY;
                 hasDraggedOnce = true;
@@ -877,6 +936,22 @@
             });
         });
 
+        // Text color swatches
+        document.querySelectorAll('#textSwatches .swatch').forEach(sw => {
+            sw.addEventListener('click', () => {
+                document.querySelectorAll('#textSwatches .swatch').forEach(s => s.classList.remove('active'));
+                sw.classList.add('active');
+                textColor = sw.dataset.color;
+                document.getElementById('textColorInput').value = textColor;
+                setStatus('✏️ Couleur du texte changée', 'info');
+            });
+        });
+
+        document.getElementById('textColorInput').addEventListener('input', (e) => {
+            textColor = e.target.value;
+            document.querySelectorAll('#textSwatches .swatch').forEach(s => s.classList.remove('active'));
+        });
+
         document.getElementById('frameSelect').addEventListener('change', (e) => {
             frameStyle = e.target.value;
             setStatus('🖼️ Cadre : ' + e.target.options[e.target.selectedIndex].text, 'info');
@@ -907,7 +982,6 @@
         const camSizeVal = document.getElementById('camSizeVal');
         camSizeSlider.addEventListener('input', (e) => {
             camSize = parseInt(e.target.value, 10);
-            // ✅ Cible au lieu de la valeur rendue
             camTargetRadius = camSize;
             camSizeVal.textContent = camSize;
         });
@@ -946,6 +1020,121 @@
             return lum > 0.6;
         }
 
+        // ========== STORY MODE DRAWING ==========
+        function drawStoryPageOnBoard() {
+            const W = boardCanvas.width;
+            const H = boardCanvas.height;
+            const isLight = isLightColor(boardColor);
+            const isPortrait = H > W;
+
+            // Start index for this page
+            const startIdx = currentPage * SENTENCES_PER_PAGE;
+            const pageSentences = sentenceData.slice(startIdx, startIdx + SENTENCES_PER_PAGE);
+            const pageNum = currentPage + 1;
+            const totalPages = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
+
+            // Header : page indicator
+            boardCtx.font = `bold ${isPortrait ? 20 : 24}px "Segoe UI", sans-serif`;
+            boardCtx.textAlign = 'right';
+            boardCtx.textBaseline = 'top';
+            boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)';
+            boardCtx.fillText(`Page ${pageNum} / ${totalPages}`, W - 30, 30);
+
+            // If no sentences, show empty message
+            if (pageSentences.length === 0) {
+                boardCtx.font = `bold ${isPortrait ? 28 : 36}px "Segoe UI", sans-serif`;
+                boardCtx.textAlign = 'center';
+                boardCtx.textBaseline = 'middle';
+                boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)';
+                boardCtx.fillText('Aucune phrase sur cette page', W / 2, H / 2);
+                return;
+            }
+
+            // Layout : 5 sentences vertically
+            const paddingTop = isPortrait ? 80 : 70;
+            const paddingBottom = isPortrait ? 80 : 90;
+            const availableHeight = H - paddingTop - paddingBottom;
+            const lineSpacing = availableHeight / SENTENCES_PER_PAGE;
+
+            const baseFontSize = isPortrait ? 28 : 36;
+            const maxWidth = isPortrait ? W - 100 : W - 200;
+
+            pageSentences.forEach((item, i) => {
+                const y = paddingTop + lineSpacing * i + lineSpacing / 2;
+
+                // Determine color: use custom textColor
+                // But English vs French? We could use a slightly different color for EN vs FR, but user wants custom text color.
+                // So we use the custom textColor for all, but maybe adjust opacity for distinction.
+                // Let's use the custom textColor directly, and add a small badge for EN/FR.
+
+                // Badge
+                const badgeText = item.isEnglish ? 'EN' : 'FR';
+                const badgeColor = item.isEnglish ? '#d9534f' : '#0275d8';
+                const badgeFont = isPortrait ? 14 : 16;
+                boardCtx.font = `bold ${badgeFont}px "Segoe UI", sans-serif`;
+                const badgeWidth = boardCtx.measureText(badgeText).width + (isPortrait ? 16 : 20);
+
+                // Draw badge on left
+                const badgeX = isPortrait ? 30 : 50;
+                const badgeY = y - (isPortrait ? 20 : 22);
+                boardCtx.fillStyle = badgeColor;
+                drawRoundRect(boardCtx, badgeX, badgeY, badgeWidth, badgeFont * 2, badgeFont);
+                boardCtx.fill();
+                boardCtx.fillStyle = '#fff';
+                boardCtx.textAlign = 'center';
+                boardCtx.textBaseline = 'middle';
+                boardCtx.fillText(badgeText, badgeX + badgeWidth / 2, badgeY + badgeFont);
+
+                // Draw sentence text
+                boardCtx.font = `bold ${baseFontSize}px "Segoe UI", sans-serif`;
+                boardCtx.textAlign = 'left';
+                boardCtx.textBaseline = 'middle';
+                boardCtx.fillStyle = textColor;
+
+                // Truncate if too long
+                let displayText = item.text;
+                if (boardCtx.measureText(displayText).width > maxWidth) {
+                    while (displayText.length > 0 && boardCtx.measureText(displayText + '…').width > maxWidth) {
+                        displayText = displayText.slice(0, -1);
+                    }
+                    displayText += '…';
+                }
+
+                boardCtx.fillText(displayText, badgeX + badgeWidth + 15, y);
+            });
+
+            // If playing, highlight current sentence with a subtle indicator
+            if (isPlaying) {
+                const activeGlobalIdx = currentIndex;
+                const activePage = Math.floor(activeGlobalIdx / SENTENCES_PER_PAGE);
+                if (activePage === currentPage) {
+                    const localIdx = activeGlobalIdx % SENTENCES_PER_PAGE;
+                    const y = paddingTop + lineSpacing * localIdx + lineSpacing / 2;
+                    // Draw a subtle highlight bar
+                    const highlightX = isPortrait ? 30 : 50;
+                    const highlightWidth = isPortrait ? W - 60 : W - 100;
+                    boardCtx.fillStyle = 'rgba(108, 92, 231, 0.15)';
+                    drawRoundRect(boardCtx, highlightX, y - lineSpacing / 2 + 4, highlightWidth, lineSpacing - 8, 8);
+                    boardCtx.fill();
+                }
+            }
+
+            // Progress bar
+            if (isPlaying) {
+                const progress = (currentIndex + (repeatCounter / (sentenceData[currentIndex]?.maxRepeats || 1))) / Math.max(1, sentenceData.length);
+                const barWidth = W * 0.6;
+                const barX = (W - barWidth) / 2;
+                const barY = H - 45;
+                boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+                drawRoundRect(boardCtx, barX, barY, barWidth, 8, 4);
+                boardCtx.fill();
+                boardCtx.fillStyle = '#6c5ce7';
+                drawRoundRect(boardCtx, barX, barY, barWidth * Math.min(progress, 1), 8, 4);
+                boardCtx.fill();
+            }
+        }
+
+        // ========== CLASSIC MODE (single sentence) ==========
         function drawSentenceOnBoard(item, index, total) {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -961,7 +1150,7 @@
                 return;
             }
 
-            const textColor = item.isEnglish ? '#ff6b6b' : '#4dabf7';
+            // Use custom textColor for the sentence
             const badgeColor = item.isEnglish ? '#d9534f' : '#0275d8';
             const badgeText = item.isEnglish ? 'EN' : 'FR';
 
@@ -1008,7 +1197,7 @@
             const startY = centerY - (totalHeight / 2) + lineHeight / 2;
 
             lines.forEach((line, i) => {
-                boardCtx.fillStyle = textColor;
+                boardCtx.fillStyle = textColor;  // <-- use custom textColor
                 boardCtx.fillText(line, W / 2, startY + (i * lineHeight));
             });
 
@@ -1169,21 +1358,78 @@
                 }
                 lastRenderTime = timestamp;
 
-                // ✅ Interpolation douce de la caméra vers sa cible
                 const lerpFactor = 0.28;
                 camX += (camTargetX - camX) * lerpFactor;
                 camY += (camTargetY - camY) * lerpFactor;
                 camRadius += (camTargetRadius - camRadius) * lerpFactor;
 
                 drawBoardBackground();
-                const activeIndex = isPlaying ? currentIndex : 0;
-                const item = sentenceData[activeIndex];
-                drawSentenceOnBoard(item, activeIndex, sentenceData.length);
+
+                if (isStoryMode) {
+                    drawStoryPageOnBoard();
+                } else {
+                    const activeIndex = isPlaying ? currentIndex : 0;
+                    const item = sentenceData[activeIndex];
+                    drawSentenceOnBoard(item, activeIndex, sentenceData.length);
+                }
+
                 drawCameraCircle();
 
                 animationFrameId = requestAnimationFrame(render);
             }
             animationFrameId = requestAnimationFrame(render);
+        }
+
+        // ==================== STORY MODE TOGGLE ====================
+        function toggleStoryMode() {
+            isStoryMode = !isStoryMode;
+            const btn = document.getElementById('storyModeBtn');
+            const storyNav = document.getElementById('storyNav');
+
+            if (isStoryMode) {
+                btn.classList.add('active');
+                btn.innerText = '📖 STORY : ON';
+                storyNav.style.display = 'flex';
+                if (sentenceData.length > 0) {
+                    totalPages = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
+                    currentPage = 0;
+                    updateStoryNav();
+                }
+                setStatus('📖 Mode STORY activé : 5 phrases par page', 'info');
+            } else {
+                btn.classList.remove('active');
+                btn.innerText = '📖 STORY : OFF';
+                storyNav.style.display = 'none';
+                setStatus('📖 Mode STORY désactivé', 'info');
+            }
+        }
+
+        function updateStoryNav() {
+            const totalPages = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
+            const pageIndicator = document.getElementById('pageIndicator');
+            const prevBtn = document.getElementById('prevPageBtn');
+            const nextBtn = document.getElementById('nextPageBtn');
+
+            pageIndicator.textContent = `Page ${currentPage + 1} / ${totalPages}`;
+            prevBtn.disabled = (currentPage === 0);
+            nextBtn.disabled = (currentPage >= totalPages - 1);
+        }
+
+        function prevPage() {
+            if (currentPage > 0) {
+                currentPage--;
+                updateStoryNav();
+                setStatus(`📖 Page ${currentPage + 1}`, 'info');
+            }
+        }
+
+        function nextPage() {
+            const totalPages = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
+            if (currentPage < totalPages - 1) {
+                currentPage++;
+                updateStoryNav();
+                setStatus(`📖 Page ${currentPage + 1}`, 'info');
+            }
         }
 
         // ==================== TTS ====================
@@ -1205,6 +1451,13 @@
                 document.getElementById('playBtn').disabled = false;
                 document.getElementById('recordBtn').disabled = false;
                 setStatus(`✅ Liste chargée : ${sentenceData.length} lignes · 3s par phrase`, 'success');
+
+                if (isStoryMode) {
+                    totalPages = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
+                    currentPage = 0;
+                    updateStoryNav();
+                }
+
                 if (!animationFrameId) startBoardRendering();
             } else {
                 document.getElementById('playBtn').disabled = true;
@@ -1250,6 +1503,15 @@
 
             synth.speak(utterance);
 
+            // In story mode, update current page to follow the playing sentence
+            if (isStoryMode) {
+                const newPage = Math.floor(currentIndex / SENTENCES_PER_PAGE);
+                if (newPage !== currentPage) {
+                    currentPage = newPage;
+                    updateStoryNav();
+                }
+            }
+
             stepTimer = setTimeout(() => {
                 if (!isPlaying) return;
                 if (isPaused) return;
@@ -1272,6 +1534,13 @@
             isPaused = false;
             currentIndex = 0;
             repeatCounter = 0;
+
+            // In story mode, start from current page
+            if (isStoryMode) {
+                currentIndex = currentPage * SENTENCES_PER_PAGE;
+                if (currentIndex >= sentenceData.length) currentIndex = 0;
+            }
+
             document.getElementById('playBtn').style.display = 'none';
             document.getElementById('pauseBtn').style.display = 'flex';
             document.getElementById('pauseBtn').innerText = "⏸ Pause";
@@ -1454,6 +1723,8 @@
                 speechSynthesis.onvoiceschanged = () => synth.getVoices();
             }
             document.getElementById('camSizeVal').textContent = camSize;
+            // Set initial text color input
+            document.getElementById('textColorInput').value = textColor;
         });
 
         window.addEventListener('beforeunload', () => {
