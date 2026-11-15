@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apprentissage Bilingue · Tableau + Caméra Ronde · Mode Histoire</title>
+    <title>Apprentissage Bilingue · Livre Histoire</title>
     <style>
         :root {
             --en-red: #d9534f;
@@ -164,7 +164,6 @@
             color: white;
         }
 
-        /* Mode STORY toggle */
         #storyModeBtn {
             background: #e0e7ff;
             color: #3730a3;
@@ -302,29 +301,58 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .story-nav {
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            margin: 10px 0;
-        }
-        .story-nav button {
-            background: #f0f0f0;
-            color: #333;
-            padding: 8px 24px;
-            font-size: 16px;
-        }
-        .story-nav button:disabled {
-            opacity: 0.3;
-        }
-        .page-indicator {
+        /* ---- Book navigation ---- */
+        .book-nav {
             display: flex;
             align-items: center;
+            justify-content: center;
+            gap: 30px;
+            margin: 15px 0 5px;
+            user-select: none;
+        }
+        .book-nav button {
+            background: #f0f0f0;
+            color: #333;
+            padding: 10px 26px;
+            font-size: 17px;
+            border-radius: 30px;
+            border: 2px solid #ddd;
+            transition: all 0.2s;
+            min-width: 130px;
+            justify-content: center;
+        }
+        .book-nav button:hover:not(:disabled) {
+            background: #4f46e5;
+            color: white;
+            border-color: #4338ca;
+            transform: translateY(-2px);
+        }
+        .book-nav button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .page-indicator {
             font-weight: bold;
             color: #4f46e5;
-            font-size: 15px;
-            padding: 0 10px;
+            font-size: 17px;
+            min-width: 100px;
+            text-align: center;
+            letter-spacing: 0.5px;
         }
+
+        /* Book page flip animation */
+        .flip-anim {
+            animation: pageFlip 0.35s ease-out;
+        }
+        @keyframes pageFlip {
+            0% { transform: perspective(1200px) rotateY(0deg); opacity: 1; }
+            45% { transform: perspective(1200px) rotateY(-8deg); opacity: 0.7; }
+            100% { transform: perspective(1200px) rotateY(0deg); opacity: 1; }
+        }
+
+        /* Hide story nav when not in story mode */
+        #bookNav { display: none; }
+        #bookNav.visible { display: flex; }
     </style>
 </head>
 <body>
@@ -335,7 +363,7 @@
     </div>
 
     <div class="input-section">
-        <textarea id="textInput" placeholder="Collez votre histoire ici (5 phrases par page)&#10;Ligne 1 : Anglais&#10;Ligne 2 : Français&#10;Ligne 3 : Anglais...&#10;&#10;En mode STORY, chaque page affiche 5 phrases (alternance EN/FR).&#10;Utilisez les boutons ◀ ▶ pour changer de page."></textarea>
+        <textarea id="textInput" placeholder="Collez votre histoire ici (5 phrases par page)&#10;Ligne 1 : Anglais&#10;Ligne 2 : Français&#10;Ligne 3 : Anglais...&#10;&#10;En mode STORY, chaque page affiche 5 phrases (alternance EN/FR).&#10;Utilisez les boutons ◀ ▶ pour tourner les pages comme un livre."></textarea>
         <div class="controls">
             <button id="loadBtn" onclick="processText()">1. Charger la liste</button>
             <button id="playBtn" onclick="startPlayAll()" disabled>▶ Lire tout</button>
@@ -347,7 +375,7 @@
             <button id="storyModeBtn" onclick="toggleStoryMode()">📖 STORY : OFF</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
-        <div class="mute-note">🔇 TTS désactivé · Chaque phrase s'affiche 3 secondes · Fond virtuel colorisable · Mode STORY : 5 phrases par page</div>
+        <div class="mute-note">🔇 TTS désactivé · 3s par phrase · Mode STORY : 5 phrases par page · Format livre</div>
     </div>
 
     <div class="options-bar">
@@ -369,7 +397,6 @@
             </div>
         </label>
 
-        <!-- NEW: Text color changer -->
         <label>✏️ Texte :
             <input type="color" id="textColorInput" value="#ff6b6b">
             <div class="swatch-group" id="textSwatches">
@@ -425,8 +452,8 @@
         </label>
     </div>
 
-    <!-- Story navigation (visible only in story mode) -->
-    <div class="story-nav" id="storyNav" style="display:none;">
+    <!-- Book page navigation (visible only in story mode) -->
+    <div class="book-nav" id="bookNav">
         <button id="prevPageBtn" onclick="prevPage()" disabled>◀ Page précédente</button>
         <span class="page-indicator" id="pageIndicator">Page 1 / 1</span>
         <button id="nextPageBtn" onclick="nextPage()" disabled>Page suivante ▶</button>
@@ -454,7 +481,7 @@
         let isPaused = false;
         let isLooping = false;
 
-        // STORY MODE
+        // STORY MODE (book)
         let isStoryMode = false;
         let currentPage = 0;
         const SENTENCES_PER_PAGE = 5;
@@ -936,7 +963,6 @@
             });
         });
 
-        // Text color swatches
         document.querySelectorAll('#textSwatches .swatch').forEach(sw => {
             sw.addEventListener('click', () => {
                 document.querySelectorAll('#textSwatches .swatch').forEach(s => s.classList.remove('active'));
@@ -1020,78 +1046,69 @@
             return lum > 0.6;
         }
 
-        // ========== STORY MODE DRAWING ==========
-        function drawStoryPageOnBoard() {
+        // ========== BOOK PAGE DRAWING (no EN/FR badges) ==========
+        function drawBookPageOnBoard() {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
             const isLight = isLightColor(boardColor);
             const isPortrait = H > W;
 
-            // Start index for this page
             const startIdx = currentPage * SENTENCES_PER_PAGE;
             const pageSentences = sentenceData.slice(startIdx, startIdx + SENTENCES_PER_PAGE);
             const pageNum = currentPage + 1;
-            const totalPages = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
+            const totalPg = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
 
-            // Header : page indicator
-            boardCtx.font = `bold ${isPortrait ? 20 : 24}px "Segoe UI", sans-serif`;
-            boardCtx.textAlign = 'right';
-            boardCtx.textBaseline = 'top';
-            boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)';
-            boardCtx.fillText(`Page ${pageNum} / ${totalPages}`, W - 30, 30);
+            // Book page look : left spine shadow
+            const spineWidth = isPortrait ? 18 : 26;
+            const gradient = boardCtx.createLinearGradient(0, 0, spineWidth, 0);
+            gradient.addColorStop(0, 'rgba(0,0,0,0.35)');
+            gradient.addColorStop(1, 'rgba(0,0,0,0)');
+            boardCtx.fillStyle = gradient;
+            boardCtx.fillRect(0, 0, spineWidth, H);
 
-            // If no sentences, show empty message
+            // Page number at bottom center
+            boardCtx.font = `bold ${isPortrait ? 18 : 22}px "Segoe UI", sans-serif`;
+            boardCtx.textAlign = 'center';
+            boardCtx.textBaseline = 'bottom';
+            boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)';
+            boardCtx.fillText(`— ${pageNum} —`, W / 2, H - 25);
+
             if (pageSentences.length === 0) {
-                boardCtx.font = `bold ${isPortrait ? 28 : 36}px "Segoe UI", sans-serif`;
+                boardCtx.font = `italic ${isPortrait ? 26 : 32}px "Segoe UI", sans-serif`;
                 boardCtx.textAlign = 'center';
                 boardCtx.textBaseline = 'middle';
                 boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)';
-                boardCtx.fillText('Aucune phrase sur cette page', W / 2, H / 2);
+                boardCtx.fillText('Page blanche', W / 2, H / 2);
                 return;
             }
 
-            // Layout : 5 sentences vertically
-            const paddingTop = isPortrait ? 80 : 70;
-            const paddingBottom = isPortrait ? 80 : 90;
+            // Book layout
+            const paddingTop = isPortrait ? 70 : 60;
+            const paddingBottom = isPortrait ? 90 : 100;
+            const paddingLeft = isPortrait ? 50 : 80;
+            const paddingRight = isPortrait ? 50 : 80;
             const availableHeight = H - paddingTop - paddingBottom;
             const lineSpacing = availableHeight / SENTENCES_PER_PAGE;
 
-            const baseFontSize = isPortrait ? 28 : 36;
-            const maxWidth = isPortrait ? W - 100 : W - 200;
+            const baseFontSize = isPortrait ? 26 : 32;
+            const maxWidth = W - paddingLeft - paddingRight;
 
             pageSentences.forEach((item, i) => {
                 const y = paddingTop + lineSpacing * i + lineSpacing / 2;
 
-                // Determine color: use custom textColor
-                // But English vs French? We could use a slightly different color for EN vs FR, but user wants custom text color.
-                // So we use the custom textColor for all, but maybe adjust opacity for distinction.
-                // Let's use the custom textColor directly, and add a small badge for EN/FR.
+                // Active highlight bar during playback
+                if (isPlaying && currentIndex === startIdx + i) {
+                    boardCtx.fillStyle = 'rgba(108, 92, 231, 0.18)';
+                    drawRoundRect(boardCtx, paddingLeft - 14, y - lineSpacing / 2 + 6, maxWidth + 28, lineSpacing - 12, 8);
+                    boardCtx.fill();
+                }
 
-                // Badge
-                const badgeText = item.isEnglish ? 'EN' : 'FR';
-                const badgeColor = item.isEnglish ? '#d9534f' : '#0275d8';
-                const badgeFont = isPortrait ? 14 : 16;
-                boardCtx.font = `bold ${badgeFont}px "Segoe UI", sans-serif`;
-                const badgeWidth = boardCtx.measureText(badgeText).width + (isPortrait ? 16 : 20);
-
-                // Draw badge on left
-                const badgeX = isPortrait ? 30 : 50;
-                const badgeY = y - (isPortrait ? 20 : 22);
-                boardCtx.fillStyle = badgeColor;
-                drawRoundRect(boardCtx, badgeX, badgeY, badgeWidth, badgeFont * 2, badgeFont);
-                boardCtx.fill();
-                boardCtx.fillStyle = '#fff';
-                boardCtx.textAlign = 'center';
-                boardCtx.textBaseline = 'middle';
-                boardCtx.fillText(badgeText, badgeX + badgeWidth / 2, badgeY + badgeFont);
-
-                // Draw sentence text
+                // Sentence text (book style, no badges)
                 boardCtx.font = `bold ${baseFontSize}px "Segoe UI", sans-serif`;
                 boardCtx.textAlign = 'left';
                 boardCtx.textBaseline = 'middle';
                 boardCtx.fillStyle = textColor;
 
-                // Truncate if too long
                 let displayText = item.text;
                 if (boardCtx.measureText(displayText).width > maxWidth) {
                     while (displayText.length > 0 && boardCtx.measureText(displayText + '…').width > maxWidth) {
@@ -1100,36 +1117,20 @@
                     displayText += '…';
                 }
 
-                boardCtx.fillText(displayText, badgeX + badgeWidth + 15, y);
+                boardCtx.fillText(displayText, paddingLeft, y);
             });
 
-            // If playing, highlight current sentence with a subtle indicator
-            if (isPlaying) {
-                const activeGlobalIdx = currentIndex;
-                const activePage = Math.floor(activeGlobalIdx / SENTENCES_PER_PAGE);
-                if (activePage === currentPage) {
-                    const localIdx = activeGlobalIdx % SENTENCES_PER_PAGE;
-                    const y = paddingTop + lineSpacing * localIdx + lineSpacing / 2;
-                    // Draw a subtle highlight bar
-                    const highlightX = isPortrait ? 30 : 50;
-                    const highlightWidth = isPortrait ? W - 60 : W - 100;
-                    boardCtx.fillStyle = 'rgba(108, 92, 231, 0.15)';
-                    drawRoundRect(boardCtx, highlightX, y - lineSpacing / 2 + 4, highlightWidth, lineSpacing - 8, 8);
-                    boardCtx.fill();
-                }
-            }
-
-            // Progress bar
+            // Progress bar during playback
             if (isPlaying) {
                 const progress = (currentIndex + (repeatCounter / (sentenceData[currentIndex]?.maxRepeats || 1))) / Math.max(1, sentenceData.length);
-                const barWidth = W * 0.6;
+                const barWidth = W * 0.5;
                 const barX = (W - barWidth) / 2;
-                const barY = H - 45;
+                const barY = H - 60;
                 boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
-                drawRoundRect(boardCtx, barX, barY, barWidth, 8, 4);
+                drawRoundRect(boardCtx, barX, barY, barWidth, 6, 3);
                 boardCtx.fill();
                 boardCtx.fillStyle = '#6c5ce7';
-                drawRoundRect(boardCtx, barX, barY, barWidth * Math.min(progress, 1), 8, 4);
+                drawRoundRect(boardCtx, barX, barY, barWidth * Math.min(progress, 1), 6, 3);
                 boardCtx.fill();
             }
         }
@@ -1150,7 +1151,6 @@
                 return;
             }
 
-            // Use custom textColor for the sentence
             const badgeColor = item.isEnglish ? '#d9534f' : '#0275d8';
             const badgeText = item.isEnglish ? 'EN' : 'FR';
 
@@ -1197,7 +1197,7 @@
             const startY = centerY - (totalHeight / 2) + lineHeight / 2;
 
             lines.forEach((line, i) => {
-                boardCtx.fillStyle = textColor;  // <-- use custom textColor
+                boardCtx.fillStyle = textColor;
                 boardCtx.fillText(line, W / 2, startY + (i * lineHeight));
             });
 
@@ -1366,7 +1366,7 @@
                 drawBoardBackground();
 
                 if (isStoryMode) {
-                    drawStoryPageOnBoard();
+                    drawBookPageOnBoard();
                 } else {
                     const activeIndex = isPlaying ? currentIndex : 0;
                     const item = sentenceData[activeIndex];
@@ -1380,54 +1380,62 @@
             animationFrameId = requestAnimationFrame(render);
         }
 
-        // ==================== STORY MODE TOGGLE ====================
+        // ==================== STORY MODE TOGGLE (book) ====================
         function toggleStoryMode() {
             isStoryMode = !isStoryMode;
             const btn = document.getElementById('storyModeBtn');
-            const storyNav = document.getElementById('storyNav');
+            const bookNav = document.getElementById('bookNav');
 
             if (isStoryMode) {
                 btn.classList.add('active');
                 btn.innerText = '📖 STORY : ON';
-                storyNav.style.display = 'flex';
+                bookNav.classList.add('visible');
                 if (sentenceData.length > 0) {
                     totalPages = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
                     currentPage = 0;
-                    updateStoryNav();
+                    updateBookNav();
                 }
-                setStatus('📖 Mode STORY activé : 5 phrases par page', 'info');
+                setStatus('📖 Mode STORY (livre) : 5 phrases par page', 'info');
             } else {
                 btn.classList.remove('active');
                 btn.innerText = '📖 STORY : OFF';
-                storyNav.style.display = 'none';
+                bookNav.classList.remove('visible');
                 setStatus('📖 Mode STORY désactivé', 'info');
             }
         }
 
-        function updateStoryNav() {
-            const totalPages = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
+        function updateBookNav() {
+            const totalPg = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
             const pageIndicator = document.getElementById('pageIndicator');
             const prevBtn = document.getElementById('prevPageBtn');
             const nextBtn = document.getElementById('nextPageBtn');
 
-            pageIndicator.textContent = `Page ${currentPage + 1} / ${totalPages}`;
+            pageIndicator.textContent = `Page ${currentPage + 1} / ${totalPg}`;
             prevBtn.disabled = (currentPage === 0);
-            nextBtn.disabled = (currentPage >= totalPages - 1);
+            nextBtn.disabled = (currentPage >= totalPg - 1);
+        }
+
+        function triggerPageFlip() {
+            videoStage.classList.remove('flip-anim');
+            void videoStage.offsetWidth;
+            videoStage.classList.add('flip-anim');
         }
 
         function prevPage() {
             if (currentPage > 0) {
                 currentPage--;
-                updateStoryNav();
+                updateBookNav();
+                triggerPageFlip();
                 setStatus(`📖 Page ${currentPage + 1}`, 'info');
             }
         }
 
         function nextPage() {
-            const totalPages = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
-            if (currentPage < totalPages - 1) {
+            const totalPg = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
+            if (currentPage < totalPg - 1) {
                 currentPage++;
-                updateStoryNav();
+                updateBookNav();
+                triggerPageFlip();
                 setStatus(`📖 Page ${currentPage + 1}`, 'info');
             }
         }
@@ -1455,7 +1463,7 @@
                 if (isStoryMode) {
                     totalPages = Math.max(1, Math.ceil(sentenceData.length / SENTENCES_PER_PAGE));
                     currentPage = 0;
-                    updateStoryNav();
+                    updateBookNav();
                 }
 
                 if (!animationFrameId) startBoardRendering();
@@ -1503,12 +1511,13 @@
 
             synth.speak(utterance);
 
-            // In story mode, update current page to follow the playing sentence
+            // In story mode, follow the page of the playing sentence
             if (isStoryMode) {
                 const newPage = Math.floor(currentIndex / SENTENCES_PER_PAGE);
                 if (newPage !== currentPage) {
                     currentPage = newPage;
-                    updateStoryNav();
+                    updateBookNav();
+                    triggerPageFlip();
                 }
             }
 
@@ -1535,7 +1544,6 @@
             currentIndex = 0;
             repeatCounter = 0;
 
-            // In story mode, start from current page
             if (isStoryMode) {
                 currentIndex = currentPage * SENTENCES_PER_PAGE;
                 if (currentIndex >= sentenceData.length) currentIndex = 0;
@@ -1682,7 +1690,7 @@
                 const a = document.createElement('a');
                 a.href = url;
                 const fmtLabel = FORMATS[currentFormat].label.replace(/\s+/g, '-').toLowerCase();
-                a.download = `apprentissage-${fmtLabel}-${Date.now()}.${ext}`;
+                a.download = `histoire-${fmtLabel}-${Date.now()}.${ext}`;
                 document.body.appendChild(a); a.click(); document.body.removeChild(a);
                 setTimeout(() => URL.revokeObjectURL(url), 10000);
                 setStatus(`✅ Vidéo téléchargée (${ext.toUpperCase()}, ${(blob.size/1024/1024).toFixed(1)} Mo)`, 'success');
@@ -1723,7 +1731,6 @@
                 speechSynthesis.onvoiceschanged = () => synth.getVoices();
             }
             document.getElementById('camSizeVal').textContent = camSize;
-            // Set initial text color input
             document.getElementById('textColorInput').value = textColor;
         });
 
