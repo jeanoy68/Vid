@@ -362,7 +362,7 @@
     </div>
 
     <div class="input-section">
-        <textarea id="textInput" placeholder="Collez votre histoire ici.&#10;Séparez chaque chapitre/paragraphe par une ligne vide (double retour à la ligne).&#10;&#10;Exemple :&#10;Chapter 1: The Beginning&#10;Once upon a time...&#10;&#10;Chapitre 2 : La suite&#10;Il était une fois...&#10;&#10;En mode STORY, chaque chapitre s'affiche sur une page complète du livre.&#10;Tournez les pages manuellement avec ◀ ▶."></textarea>
+        <textarea id="textInput" placeholder="Collez votre histoire ici.&#10;Séparez chaque paragraphe/page par une ligne vide (double retour à la ligne).&#10;&#10;Exemple :&#10;Once upon a time...&#10;&#10;Il était une fois...&#10;&#10;En mode STORY, chaque paragraphe s'affiche sur une page complète du livre.&#10;Tournez les pages manuellement avec ◀ ▶."></textarea>
         <div class="controls">
             <button id="loadBtn" onclick="processText()">1. Charger l'histoire</button>
             <button id="playBtn" onclick="startPlayAll()" disabled>▶ Lire tout</button>
@@ -374,7 +374,7 @@
             <button id="storyModeBtn" onclick="toggleStoryMode()">📖 STORY : OFF</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
-        <div class="mute-note">🔇 TTS désactivé · Mode STORY : 1 chapitre par page · Tournez les pages manuellement</div>
+        <div class="mute-note">🔇 TTS désactivé · Mode STORY : 1 paragraphe par page · Tournez les pages manuellement</div>
     </div>
 
     <div class="options-bar">
@@ -473,7 +473,7 @@
         // ==================== ÉTAT GLOBAL ====================
         const synth = window.speechSynthesis;
         let sentenceData = [];          // classic mode
-        let chapters = [];              // story mode
+        let chapters = [];              // story mode (now = paragraphs/pages)
         let currentIndex = 0;
         let repeatCounter = 0;
         let isPlaying = false;
@@ -1030,7 +1030,7 @@
             return lum > 0.6;
         }
 
-        // ========== PROFESSIONAL BOOK PAGE ==========
+        // ========== PROFESSIONAL BOOK PAGE (no chapter title) ==========
         function drawBookPageOnBoard() {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -1057,12 +1057,11 @@
             boardCtx.fillStyle = edgeGrad;
             boardCtx.fillRect(W - 18, 0, 18, H);
 
-            // ---- Decorative top rule + chapter header ----
+            // ---- Decorative top rule + ornament ----
             const marginL = isPortrait ? 55 : 90;
             const marginR = isPortrait ? 55 : 90;
             const contentW = W - marginL - marginR;
 
-            // Top decorative line
             boardCtx.strokeStyle = isLight ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.22)';
             boardCtx.lineWidth = 1;
             boardCtx.beginPath();
@@ -1070,30 +1069,11 @@
             boardCtx.lineTo(W - marginR, isPortrait ? 46 : 54);
             boardCtx.stroke();
 
-            // Small ornament (✦) at top center
             boardCtx.font = `${isPortrait ? 16 : 18}px "Segoe UI", sans-serif`;
             boardCtx.textAlign = 'center';
             boardCtx.textBaseline = 'middle';
             boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)';
             boardCtx.fillText('✦', W / 2, isPortrait ? 46 : 54);
-
-            // Chapter title
-            const titleSize = isPortrait ? 22 : 26;
-            const titleText = chapter ? chapter.title.toUpperCase() : 'CHAPITRE';
-            boardCtx.font = `700 ${titleSize}px "Georgia", "Segoe UI", serif`;
-            boardCtx.textAlign = 'center';
-            boardCtx.textBaseline = 'top';
-            boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.55)';
-            boardCtx.fillText(titleText, W / 2, isPortrait ? 66 : 76);
-
-            // Second decorative rule (below title)
-            const rule2Y = isPortrait ? 106 : 120;
-            boardCtx.strokeStyle = isLight ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.18)';
-            boardCtx.lineWidth = 1;
-            boardCtx.beginPath();
-            boardCtx.moveTo(marginL + contentW * 0.30, rule2Y);
-            boardCtx.lineTo(W - marginR - contentW * 0.30, rule2Y);
-            boardCtx.stroke();
 
             // ---- Page number footer ----
             boardCtx.font = `${isPortrait ? 15 : 17}px "Segoe UI", sans-serif`;
@@ -1112,11 +1092,11 @@
             }
 
             // ---- Body text layout ----
-            const paddingTop = isPortrait ? 130 : 150;
+            const paddingTop = isPortrait ? 90 : 110;
             const paddingBottom = isPortrait ? 85 : 95;
             const contentHeight = H - paddingTop - paddingBottom;
 
-            let baseFontSize = isPortrait ? 26 : 31;
+            let baseFontSize = isPortrait ? 27 : 32;
             const lineHeightFactor = 1.6;
             let lines = [];
 
@@ -1151,7 +1131,6 @@
             const totalTextHeight = lines.length * lineHeight;
             const startY = paddingTop + Math.max(0, (contentHeight - totalTextHeight) / 2) + baseFontSize * 0.95;
 
-            // Body text
             boardCtx.font = `400 ${baseFontSize}px "Georgia", "Segoe UI", serif`;
             boardCtx.textAlign = 'left';
             boardCtx.textBaseline = 'alphabetic';
@@ -1161,7 +1140,7 @@
                 boardCtx.fillText(line, marginL, startY + i * lineHeight);
             });
 
-            // Subtle progress in book (only when playing)
+            // Subtle progress bar during playback
             if (isPlaying) {
                 const progress = (currentPage + 1) / Math.max(1, chapters.length);
                 const barWidth = contentW * 0.4;
@@ -1436,7 +1415,7 @@
                     currentPage = 0;
                     updateBookNav();
                 }
-                setStatus('📖 Mode STORY (livre) : 1 chapitre par page · Tournez manuellement', 'info');
+                setStatus('📖 Mode STORY (livre) : 1 page par paragraphe · Tournez manuellement', 'info');
             } else {
                 btn.classList.remove('active');
                 btn.innerText = '📖 STORY : OFF';
@@ -1493,7 +1472,6 @@
             blocks.forEach((block, i) => {
                 const isEnglish = i % 2 === 0;
                 result.push({
-                    title: `Chapitre ${i + 1}`,
                     text: block,
                     lang: isEnglish ? 'en-US' : 'fr-FR',
                     isEnglish: isEnglish
@@ -1524,7 +1502,7 @@
                 document.getElementById('playBtn').disabled = false;
                 document.getElementById('recordBtn').disabled = false;
 
-                const msg = `✅ Chargé : ${sentenceData.length} lignes (classique) · ${chapters.length} chapitres (story)`;
+                const msg = `✅ Chargé : ${sentenceData.length} lignes (classique) · ${chapters.length} pages (story)`;
                 setStatus(msg, 'success');
 
                 if (isStoryMode) {
@@ -1550,11 +1528,8 @@
 
         // ---- STORY PLAYBACK : silent TTS, page stays until user clicks Next ----
         function speakStoryChapter() {
-            // In story mode, no automatic advance. We still (silently) speak the chapter
-            // so recording captures timing, but page navigation is manual only.
             if (!isPlaying || isPaused) return;
             if (currentPage >= chapters.length) {
-                // Stop at last page — no loop in story mode unless user manually navigates
                 stopSpeech();
                 return;
             }
@@ -1572,7 +1547,7 @@
             utterance.onerror = () => {};
             synth.speak(utterance);
 
-            // NO stepTimer that advances pages. The page stays until user clicks ◀ ▶.
+            // NO auto-advance. Page changes only via ◀ ▶ buttons.
         }
 
         // ---- CLASSIC PLAYBACK : line by line ----
@@ -1636,7 +1611,7 @@
                 document.getElementById('pauseBtn').style.display = 'flex';
                 document.getElementById('pauseBtn').innerText = "⏸ Pause";
                 speakStoryChapter();
-                setStatus('▶ Lecture en mode manuel : cliquez sur Page suivante ▶', 'info');
+                setStatus('▶ Mode manuel : cliquez sur Page suivante ▶', 'info');
             } else {
                 currentIndex = 0;
                 repeatCounter = 0;
@@ -1660,7 +1635,6 @@
                 if (synth.paused) synth.resume();
 
                 if (isStoryMode) {
-                    // Story mode resumes silently — no auto-advance
                     speakStoryChapter();
                 } else {
                     const elapsed = Date.now() - sentenceStartTime;
