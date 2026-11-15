@@ -317,7 +317,7 @@
             font-size: 17px;
             border-radius: 30px;
             border: 2px solid #ddd;
-            transition: all 0.2s;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
             min-width: 140px;
             justify-content: center;
         }
@@ -325,7 +325,6 @@
             background: #4f46e5;
             color: white;
             border-color: #4338ca;
-            transform: translateY(-2px);
         }
         .book-nav button:disabled {
             opacity: 0.3;
@@ -340,16 +339,6 @@
             letter-spacing: 0.5px;
         }
 
-        /* Page flip animation */
-        .flip-anim {
-            animation: pageFlip 0.45s ease-out;
-        }
-        @keyframes pageFlip {
-            0% { transform: perspective(1200px) rotateY(0deg); opacity: 1; }
-            45% { transform: perspective(1200px) rotateY(-10deg); opacity: 0.75; }
-            100% { transform: perspective(1200px) rotateY(0deg); opacity: 1; }
-        }
-
         #bookNav { display: none; }
         #bookNav.visible { display: flex; }
     </style>
@@ -362,7 +351,7 @@
     </div>
 
     <div class="input-section">
-        <textarea id="textInput" placeholder="Collez votre histoire ici.&#10;Séparez chaque paragraphe/page par une ligne vide (double retour à la ligne).&#10;&#10;Exemple :&#10;Once upon a time...&#10;&#10;Il était une fois...&#10;&#10;En mode STORY, chaque paragraphe s'affiche sur une page complète du livre.&#10;Tournez les pages manuellement avec ◀ ▶."></textarea>
+        <textarea id="textInput" placeholder="Collez votre histoire ici.&#10;Séparez chaque page par une ligne vide (double retour à la ligne).&#10;&#10;Règle bilingue :&#10;• Ligne 1 = Anglais (ROUGE)&#10;• Ligne 2 = Français (BLEU)&#10;• etc.&#10;&#10;Tournez les pages manuellement avec ◀ ▶."></textarea>
         <div class="controls">
             <button id="loadBtn" onclick="processText()">1. Charger l'histoire</button>
             <button id="playBtn" onclick="startPlayAll()" disabled>▶ Lire tout</button>
@@ -374,7 +363,7 @@
             <button id="storyModeBtn" onclick="toggleStoryMode()">📖 STORY : OFF</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
-        <div class="mute-note">🔇 TTS désactivé · Mode STORY : 1 paragraphe par page · Tournez les pages manuellement</div>
+        <div class="mute-note">🔇 TTS désactivé · STORY : Anglais en ROUGE · Français en BLEU · Pages manuelles</div>
     </div>
 
     <div class="options-bar">
@@ -396,7 +385,7 @@
             </div>
         </label>
 
-        <label>✏️ Texte :
+        <label>✏️ Texte (classique) :
             <input type="color" id="textColorInput" value="#ff6b6b">
             <div class="swatch-group" id="textSwatches">
                 <div class="swatch active" data-color="#ff6b6b" style="background:#ff6b6b" title="Rouge clair"></div>
@@ -473,7 +462,7 @@
         // ==================== ÉTAT GLOBAL ====================
         const synth = window.speechSynthesis;
         let sentenceData = [];          // classic mode
-        let chapters = [];              // story mode (now = paragraphs/pages)
+        let chapters = [];              // story mode (pages)
         let currentIndex = 0;
         let repeatCounter = 0;
         let isPlaying = false;
@@ -485,7 +474,12 @@
         let currentPage = 0;
         let totalPages = 1;
 
+        // Custom text color for classic mode only
         let textColor = '#ff6b6b';
+
+        // Fixed bilingual colors
+        const EN_RED = '#d9534f';
+        const FR_BLUE = '#0275d8';
 
         const DISPLAY_DURATION_MS = 3000;
 
@@ -953,7 +947,7 @@
                 sw.classList.add('active');
                 textColor = sw.dataset.color;
                 document.getElementById('textColorInput').value = textColor;
-                setStatus('✏️ Couleur du texte changée', 'info');
+                setStatus('✏️ Couleur du texte (classique) changée', 'info');
             });
         });
 
@@ -1030,7 +1024,8 @@
             return lum > 0.6;
         }
 
-        // ========== PROFESSIONAL BOOK PAGE (no chapter title) ==========
+        // ========== BOOK PAGE — with bilingual red/blue per line ==========
+        // English = RED, French = BLUE. No custom color in story mode.
         function drawBookPageOnBoard() {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -1042,48 +1037,48 @@
             const totalPg = Math.max(1, chapters.length);
 
             // ---- Book spine shadow ----
-            const spineWidth = isPortrait ? 22 : 32;
+            const spineWidth = isPortrait ? 18 : 26;
             const spineGrad = boardCtx.createLinearGradient(0, 0, spineWidth, 0);
-            spineGrad.addColorStop(0, 'rgba(0,0,0,0.45)');
-            spineGrad.addColorStop(0.6, 'rgba(0,0,0,0.15)');
+            spineGrad.addColorStop(0, 'rgba(0,0,0,0.40)');
+            spineGrad.addColorStop(0.6, 'rgba(0,0,0,0.12)');
             spineGrad.addColorStop(1, 'rgba(0,0,0,0)');
             boardCtx.fillStyle = spineGrad;
             boardCtx.fillRect(0, 0, spineWidth, H);
 
-            // ---- Page edge (right/bottom subtle inner shadow) ----
-            const edgeGrad = boardCtx.createLinearGradient(W, 0, W - 18, 0);
-            edgeGrad.addColorStop(0, 'rgba(0,0,0,0.10)');
+            // ---- Page edge (right subtle inner shadow) ----
+            const edgeGrad = boardCtx.createLinearGradient(W, 0, W - 16, 0);
+            edgeGrad.addColorStop(0, 'rgba(0,0,0,0.08)');
             edgeGrad.addColorStop(1, 'rgba(0,0,0,0)');
             boardCtx.fillStyle = edgeGrad;
-            boardCtx.fillRect(W - 18, 0, 18, H);
+            boardCtx.fillRect(W - 16, 0, 16, H);
 
             // ---- Decorative top rule + ornament ----
-            const marginL = isPortrait ? 55 : 90;
-            const marginR = isPortrait ? 55 : 90;
+            const marginL = isPortrait ? 42 : 70;
+            const marginR = isPortrait ? 42 : 70;
             const contentW = W - marginL - marginR;
 
             boardCtx.strokeStyle = isLight ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.22)';
             boardCtx.lineWidth = 1;
             boardCtx.beginPath();
-            boardCtx.moveTo(marginL, isPortrait ? 46 : 54);
-            boardCtx.lineTo(W - marginR, isPortrait ? 46 : 54);
+            boardCtx.moveTo(marginL, isPortrait ? 40 : 46);
+            boardCtx.lineTo(W - marginR, isPortrait ? 40 : 46);
             boardCtx.stroke();
 
-            boardCtx.font = `${isPortrait ? 16 : 18}px "Segoe UI", sans-serif`;
+            boardCtx.font = `${isPortrait ? 14 : 16}px "Segoe UI", sans-serif`;
             boardCtx.textAlign = 'center';
             boardCtx.textBaseline = 'middle';
             boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)';
-            boardCtx.fillText('✦', W / 2, isPortrait ? 46 : 54);
+            boardCtx.fillText('✦', W / 2, isPortrait ? 40 : 46);
 
             // ---- Page number footer ----
-            boardCtx.font = `${isPortrait ? 15 : 17}px "Segoe UI", sans-serif`;
+            boardCtx.font = `${isPortrait ? 14 : 16}px "Segoe UI", sans-serif`;
             boardCtx.textAlign = 'center';
             boardCtx.textBaseline = 'bottom';
             boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)';
-            boardCtx.fillText(`— ${pageNum} —`, W / 2, H - 28);
+            boardCtx.fillText(`— ${pageNum} —`, W / 2, H - 22);
 
-            if (!chapter || !chapter.text) {
-                boardCtx.font = `italic ${isPortrait ? 26 : 32}px "Georgia", serif`;
+            if (!chapter || !chapter.lines || chapter.lines.length === 0) {
+                boardCtx.font = `italic ${isPortrait ? 24 : 30}px "Georgia", serif`;
                 boardCtx.textAlign = 'center';
                 boardCtx.textBaseline = 'middle';
                 boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)';
@@ -1091,16 +1086,18 @@
                 return;
             }
 
-            // ---- Body text layout ----
-            const paddingTop = isPortrait ? 90 : 110;
-            const paddingBottom = isPortrait ? 85 : 95;
+            // ---- Body text layout : multi-line, each line coloured by language ----
+            const paddingTop = isPortrait ? 62 : 72;
+            const paddingBottom = isPortrait ? 58 : 66;
             const contentHeight = H - paddingTop - paddingBottom;
 
-            let baseFontSize = isPortrait ? 27 : 32;
-            const lineHeightFactor = 1.6;
-            let lines = [];
+            let baseFontSize = isPortrait ? 21 : 24;
+            const minFontSize = 9;
+            const lineHeightFactor = 1.45;
 
-            function wrapText(text, fontSize) {
+            // Each chapter has `lines`: [{text, isEnglish}, ...]
+            // We need to wrap each line separately to preserve color boundaries.
+            function wrapLine(text, fontSize) {
                 boardCtx.font = `400 ${fontSize}px "Georgia", "Segoe UI", serif`;
                 const words = text.split(/\s+/);
                 const out = [];
@@ -1118,26 +1115,58 @@
                 return out;
             }
 
+            // Build a list of rendered lines with their colour.
+            // Insert a small gap between different language blocks.
+            let wrapped = [];
+            chapter.lines.forEach((ln, idx) => {
+                const wrappedParts = wrapLine(ln.text, baseFontSize);
+                const color = ln.isEnglish ? EN_RED : FR_BLUE;
+                wrappedParts.forEach((wp, i) => {
+                    wrapped.push({
+                        text: wp,
+                        color: color,
+                        isFirstOfLine: i === 0,
+                        isLastOfLine: i === wrappedParts.length - 1,
+                        lineIndex: idx
+                    });
+                });
+            });
+
+            // Shrink until total height fits
             let attempts = 0;
-            while (attempts < 24) {
-                lines = wrapText(chapter.text, baseFontSize);
-                const totalH = lines.length * baseFontSize * lineHeightFactor;
-                if (totalH <= contentHeight || baseFontSize <= 11) break;
-                baseFontSize -= 1.5;
+            while (attempts < 40) {
+                const totalH = wrapped.length * baseFontSize * lineHeightFactor;
+                if (totalH <= contentHeight || baseFontSize <= minFontSize) break;
+                baseFontSize -= 1;
                 attempts++;
+                // re-wrap with smaller font
+                wrapped = [];
+                chapter.lines.forEach((ln, idx) => {
+                    const wrappedParts = wrapLine(ln.text, baseFontSize);
+                    const color = ln.isEnglish ? EN_RED : FR_BLUE;
+                    wrappedParts.forEach((wp, i) => {
+                        wrapped.push({
+                            text: wp,
+                            color: color,
+                            isFirstOfLine: i === 0,
+                            isLastOfLine: i === wrappedParts.length - 1,
+                            lineIndex: idx
+                        });
+                    });
+                });
             }
 
             const lineHeight = baseFontSize * lineHeightFactor;
-            const totalTextHeight = lines.length * lineHeight;
-            const startY = paddingTop + Math.max(0, (contentHeight - totalTextHeight) / 2) + baseFontSize * 0.95;
+            const totalTextHeight = wrapped.length * lineHeight;
+            const startY = paddingTop + Math.max(0, (contentHeight - totalTextHeight) / 2) + baseFontSize * 0.85;
 
             boardCtx.font = `400 ${baseFontSize}px "Georgia", "Segoe UI", serif`;
             boardCtx.textAlign = 'left';
             boardCtx.textBaseline = 'alphabetic';
-            boardCtx.fillStyle = textColor;
 
-            lines.forEach((line, i) => {
-                boardCtx.fillText(line, marginL, startY + i * lineHeight);
+            wrapped.forEach((ln, i) => {
+                boardCtx.fillStyle = ln.color;
+                boardCtx.fillText(ln.text, marginL, startY + i * lineHeight);
             });
 
             // Subtle progress bar during playback
@@ -1145,7 +1174,7 @@
                 const progress = (currentPage + 1) / Math.max(1, chapters.length);
                 const barWidth = contentW * 0.4;
                 const barX = (W - barWidth) / 2;
-                const barY = H - 50;
+                const barY = H - 44;
                 boardCtx.fillStyle = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
                 drawRoundRect(boardCtx, barX, barY, barWidth, 3, 1.5);
                 boardCtx.fill();
@@ -1155,7 +1184,7 @@
             }
         }
 
-        // ========== CLASSIC MODE ==========
+        // ========== CLASSIC MODE (custom colour) ==========
         function drawSentenceOnBoard(item, index, total) {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -1171,7 +1200,7 @@
                 return;
             }
 
-            const badgeColor = item.isEnglish ? '#d9534f' : '#0275d8';
+            const badgeColor = item.isEnglish ? EN_RED : FR_BLUE;
             const badgeText = item.isEnglish ? 'EN' : 'FR';
 
             const badgeSize = isPortrait ? 36 : 44;
@@ -1216,6 +1245,7 @@
             const centerY = isPortrait ? H * 0.42 : H / 2;
             const startY = centerY - (totalHeight / 2) + lineHeight / 2;
 
+            // Classic mode uses the custom textColor
             lines.forEach((line, i) => {
                 boardCtx.fillStyle = textColor;
                 boardCtx.fillText(line, W / 2, startY + (i * lineHeight));
@@ -1415,7 +1445,7 @@
                     currentPage = 0;
                     updateBookNav();
                 }
-                setStatus('📖 Mode STORY (livre) : 1 page par paragraphe · Tournez manuellement', 'info');
+                setStatus('📖 Mode STORY : Anglais ROUGE · Français BLEU · Pages manuelles', 'info');
             } else {
                 btn.classList.remove('active');
                 btn.innerText = '📖 STORY : OFF';
@@ -1435,17 +1465,11 @@
             nextBtn.disabled = (currentPage >= totalPg - 1);
         }
 
-        function triggerPageFlip() {
-            videoStage.classList.remove('flip-anim');
-            void videoStage.offsetWidth;
-            videoStage.classList.add('flip-anim');
-        }
-
+        // Page changes are instant — no shake / no flip animation
         function prevPage() {
             if (currentPage > 0) {
                 currentPage--;
                 updateBookNav();
-                triggerPageFlip();
                 setStatus(`📖 Page ${currentPage + 1}`, 'info');
             }
         }
@@ -1455,12 +1479,14 @@
             if (currentPage < totalPg - 1) {
                 currentPage++;
                 updateBookNav();
-                triggerPageFlip();
                 setStatus(`📖 Page ${currentPage + 1}`, 'info');
             }
         }
 
         // ==================== TTS & PLAYBACK ====================
+        // For story mode, we build a "chapter" object with `lines`:
+        // Each line = one original input line, keeping its language so we can
+        // paint English red and French blue on the book page.
         function buildChapters(rawText) {
             const blocks = rawText
                 .replace(/\r\n/g, '\n')
@@ -1470,20 +1496,49 @@
 
             const result = [];
             blocks.forEach((block, i) => {
-                const isEnglish = i % 2 === 0;
+                // Split the block into its original lines (single newlines)
+                const rawLines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+                // Recompute language alternation across the WHOLE story
+                // so English is always red and French always blue.
+                // We keep a global counter of lines.
+                const lines = [];
+                rawLines.forEach((lineText) => {
+                    // Global line index determines language
+                    // (English on even indices, French on odd, matching the classic rule)
+                    const globalIdx = countGlobalLinesSoFar + lines.length;
+                    const isEnglish = globalIdx % 2 === 0;
+                    lines.push({
+                        text: lineText,
+                        isEnglish: isEnglish
+                    });
+                });
+                countGlobalLinesSoFar += rawLines.length;
+
+                // Full text for TTS (join with spaces)
+                const fullText = rawLines.join(' ');
+
+                // Language of the block : English if first line is English
+                const blockIsEnglish = lines.length > 0 ? lines[0].isEnglish : true;
+
                 result.push({
-                    text: block,
-                    lang: isEnglish ? 'en-US' : 'fr-FR',
-                    isEnglish: isEnglish
+                    text: fullText,
+                    lines: lines,
+                    lang: blockIsEnglish ? 'en-US' : 'fr-FR',
+                    isEnglish: blockIsEnglish
                 });
             });
             return result;
         }
 
+        // Helper counter used while building chapters
+        let countGlobalLinesSoFar = 0;
+
         function processText() {
             stopSpeech();
             const input = document.getElementById('textInput').value;
 
+            // Classic mode data : line by line
             const lines = input.split('\n').map(l => l.trim()).filter(l => l !== "");
             sentenceData = [];
             lines.forEach((line, index) => {
@@ -1496,6 +1551,8 @@
                 });
             });
 
+            // Story mode : pages made of blocks, each block keeps its lines with language info
+            countGlobalLinesSoFar = 0;
             chapters = buildChapters(input);
 
             if (sentenceData.length > 0 || chapters.length > 0) {
