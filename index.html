@@ -341,6 +341,28 @@
 
         #bookNav { display: none; }
         #bookNav.visible { display: flex; }
+
+        /* Bilingual color pickers */
+        .bilingual-colors {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            padding: 4px 8px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        .bilingual-colors label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #555;
+        }
+        .bilingual-colors input[type="color"] {
+            width: 32px;
+            height: 28px;
+            padding: 1px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -351,7 +373,7 @@
     </div>
 
     <div class="input-section">
-        <textarea id="textInput" placeholder="Collez votre histoire ici.&#10;Séparez chaque page par une ligne vide (double retour à la ligne).&#10;&#10;Règle bilingue :&#10;• Ligne 1 = Anglais (ROUGE)&#10;• Ligne 2 = Français (BLEU)&#10;• etc.&#10;&#10;Tournez les pages manuellement avec ◀ ▶."></textarea>
+        <textarea id="textInput" placeholder="Collez votre histoire ici.&#10;Séparez chaque page par une ligne vide (double retour à la ligne).&#10;&#10;Règle bilingue :&#10;• Ligne 1 = Anglais&#10;• Ligne 2 = Français&#10;• etc.&#10;&#10;Tournez les pages manuellement avec ◀ ▶."></textarea>
         <div class="controls">
             <button id="loadBtn" onclick="processText()">1. Charger l'histoire</button>
             <button id="playBtn" onclick="startPlayAll()" disabled>▶ Lire tout</button>
@@ -363,7 +385,7 @@
             <button id="storyModeBtn" onclick="toggleStoryMode()">📖 STORY : OFF</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
-        <div class="mute-note">🔇 TTS désactivé · STORY : Anglais en ROUGE · Français en BLEU · Pages manuelles</div>
+        <div class="mute-note">🔇 TTS désactivé · STORY : Couleurs personnalisables EN/FR · Pages manuelles</div>
     </div>
 
     <div class="options-bar">
@@ -385,15 +407,13 @@
             </div>
         </label>
 
-        <label>✏️ Texte (classique) :
-            <input type="color" id="textColorInput" value="#ff6b6b">
-            <div class="swatch-group" id="textSwatches">
-                <div class="swatch active" data-color="#ff6b6b" style="background:#ff6b6b" title="Rouge clair"></div>
-                <div class="swatch" data-color="#4dabf7" style="background:#4dabf7" title="Bleu clair"></div>
-                <div class="swatch" data-color="#feca57" style="background:#feca57" title="Jaune"></div>
-                <div class="swatch" data-color="#a29bfe" style="background:#a29bfe" title="Lavande"></div>
-                <div class="swatch" data-color="#55efc4" style="background:#55efc4" title="Menthe"></div>
-                <div class="swatch" data-color="#ffffff" style="background:#ffffff;border:1px solid #ccc" title="Blanc"></div>
+        <!-- NEW: Bilingual text colours -->
+        <label>🎯 Couleurs :
+            <div class="bilingual-colors">
+                <label>EN</label>
+                <input type="color" id="enColorInput" value="#d9534f">
+                <label>FR</label>
+                <input type="color" id="frColorInput" value="#0275d8">
             </div>
         </label>
 
@@ -461,25 +481,21 @@
     <script>
         // ==================== ÉTAT GLOBAL ====================
         const synth = window.speechSynthesis;
-        let sentenceData = [];          // classic mode
-        let chapters = [];              // story mode (pages)
+        let sentenceData = [];
+        let chapters = [];
         let currentIndex = 0;
         let repeatCounter = 0;
         let isPlaying = false;
         let isPaused = false;
         let isLooping = false;
 
-        // STORY MODE (book)
         let isStoryMode = false;
         let currentPage = 0;
         let totalPages = 1;
 
-        // Custom text color for classic mode only
-        let textColor = '#ff6b6b';
-
-        // Fixed bilingual colors
-        const EN_RED = '#d9534f';
-        const FR_BLUE = '#0275d8';
+        // Bilingual colors (customizable)
+        let enColor = '#d9534f';
+        let frColor = '#0275d8';
 
         const DISPLAY_DURATION_MS = 3000;
 
@@ -941,19 +957,17 @@
             });
         });
 
-        document.querySelectorAll('#textSwatches .swatch').forEach(sw => {
-            sw.addEventListener('click', () => {
-                document.querySelectorAll('#textSwatches .swatch').forEach(s => s.classList.remove('active'));
-                sw.classList.add('active');
-                textColor = sw.dataset.color;
-                document.getElementById('textColorInput').value = textColor;
-                setStatus('✏️ Couleur du texte (classique) changée', 'info');
-            });
-        });
+        // Bilingual color pickers
+        const enColorInput = document.getElementById('enColorInput');
+        const frColorInput = document.getElementById('frColorInput');
 
-        document.getElementById('textColorInput').addEventListener('input', (e) => {
-            textColor = e.target.value;
-            document.querySelectorAll('#textSwatches .swatch').forEach(s => s.classList.remove('active'));
+        enColorInput.addEventListener('input', (e) => {
+            enColor = e.target.value;
+            setStatus('🎯 Couleur ANGLAIS changée', 'info');
+        });
+        frColorInput.addEventListener('input', (e) => {
+            frColor = e.target.value;
+            setStatus('🎯 Couleur FRANÇAIS changée', 'info');
         });
 
         document.getElementById('frameSelect').addEventListener('change', (e) => {
@@ -1024,8 +1038,7 @@
             return lum > 0.6;
         }
 
-        // ========== BOOK PAGE — with bilingual red/blue per line ==========
-        // English = RED, French = BLUE. No custom color in story mode.
+        // ========== BOOK PAGE — bilingual colours (customizable) ==========
         function drawBookPageOnBoard() {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -1045,7 +1058,7 @@
             boardCtx.fillStyle = spineGrad;
             boardCtx.fillRect(0, 0, spineWidth, H);
 
-            // ---- Page edge (right subtle inner shadow) ----
+            // ---- Page edge ----
             const edgeGrad = boardCtx.createLinearGradient(W, 0, W - 16, 0);
             edgeGrad.addColorStop(0, 'rgba(0,0,0,0.08)');
             edgeGrad.addColorStop(1, 'rgba(0,0,0,0)');
@@ -1086,7 +1099,7 @@
                 return;
             }
 
-            // ---- Body text layout : multi-line, each line coloured by language ----
+            // ---- Body text layout ----
             const paddingTop = isPortrait ? 62 : 72;
             const paddingBottom = isPortrait ? 58 : 66;
             const contentHeight = H - paddingTop - paddingBottom;
@@ -1095,8 +1108,6 @@
             const minFontSize = 9;
             const lineHeightFactor = 1.45;
 
-            // Each chapter has `lines`: [{text, isEnglish}, ...]
-            // We need to wrap each line separately to preserve color boundaries.
             function wrapLine(text, fontSize) {
                 boardCtx.font = `400 ${fontSize}px "Georgia", "Segoe UI", serif`;
                 const words = text.split(/\s+/);
@@ -1115,45 +1126,26 @@
                 return out;
             }
 
-            // Build a list of rendered lines with their colour.
-            // Insert a small gap between different language blocks.
             let wrapped = [];
-            chapter.lines.forEach((ln, idx) => {
-                const wrappedParts = wrapLine(ln.text, baseFontSize);
-                const color = ln.isEnglish ? EN_RED : FR_BLUE;
-                wrappedParts.forEach((wp, i) => {
-                    wrapped.push({
-                        text: wp,
-                        color: color,
-                        isFirstOfLine: i === 0,
-                        isLastOfLine: i === wrappedParts.length - 1,
-                        lineIndex: idx
+            const buildWrapped = () => {
+                wrapped = [];
+                chapter.lines.forEach((ln) => {
+                    const wrappedParts = wrapLine(ln.text, baseFontSize);
+                    const color = ln.isEnglish ? enColor : frColor;
+                    wrappedParts.forEach((wp) => {
+                        wrapped.push({ text: wp, color: color });
                     });
                 });
-            });
+            };
 
-            // Shrink until total height fits
+            buildWrapped();
             let attempts = 0;
             while (attempts < 40) {
                 const totalH = wrapped.length * baseFontSize * lineHeightFactor;
                 if (totalH <= contentHeight || baseFontSize <= minFontSize) break;
                 baseFontSize -= 1;
                 attempts++;
-                // re-wrap with smaller font
-                wrapped = [];
-                chapter.lines.forEach((ln, idx) => {
-                    const wrappedParts = wrapLine(ln.text, baseFontSize);
-                    const color = ln.isEnglish ? EN_RED : FR_BLUE;
-                    wrappedParts.forEach((wp, i) => {
-                        wrapped.push({
-                            text: wp,
-                            color: color,
-                            isFirstOfLine: i === 0,
-                            isLastOfLine: i === wrappedParts.length - 1,
-                            lineIndex: idx
-                        });
-                    });
-                });
+                buildWrapped();
             }
 
             const lineHeight = baseFontSize * lineHeightFactor;
@@ -1169,7 +1161,6 @@
                 boardCtx.fillText(ln.text, marginL, startY + i * lineHeight);
             });
 
-            // Subtle progress bar during playback
             if (isPlaying) {
                 const progress = (currentPage + 1) / Math.max(1, chapters.length);
                 const barWidth = contentW * 0.4;
@@ -1184,7 +1175,7 @@
             }
         }
 
-        // ========== CLASSIC MODE (custom colour) ==========
+        // ========== CLASSIC MODE (uses bilingual colours) ==========
         function drawSentenceOnBoard(item, index, total) {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -1200,7 +1191,7 @@
                 return;
             }
 
-            const badgeColor = item.isEnglish ? EN_RED : FR_BLUE;
+            const badgeColor = item.isEnglish ? enColor : frColor;
             const badgeText = item.isEnglish ? 'EN' : 'FR';
 
             const badgeSize = isPortrait ? 36 : 44;
@@ -1245,9 +1236,10 @@
             const centerY = isPortrait ? H * 0.42 : H / 2;
             const startY = centerY - (totalHeight / 2) + lineHeight / 2;
 
-            // Classic mode uses the custom textColor
+            // Classic mode uses the bilingual color for the current sentence
+            const textFill = item.isEnglish ? enColor : frColor;
             lines.forEach((line, i) => {
-                boardCtx.fillStyle = textColor;
+                boardCtx.fillStyle = textFill;
                 boardCtx.fillText(line, W / 2, startY + (i * lineHeight));
             });
 
@@ -1445,7 +1437,7 @@
                     currentPage = 0;
                     updateBookNav();
                 }
-                setStatus('📖 Mode STORY : Anglais ROUGE · Français BLEU · Pages manuelles', 'info');
+                setStatus('📖 Mode STORY : Couleurs EN/FR personnalisables · Pages manuelles', 'info');
             } else {
                 btn.classList.remove('active');
                 btn.innerText = '📖 STORY : OFF';
@@ -1465,7 +1457,6 @@
             nextBtn.disabled = (currentPage >= totalPg - 1);
         }
 
-        // Page changes are instant — no shake / no flip animation
         function prevPage() {
             if (currentPage > 0) {
                 currentPage--;
@@ -1484,9 +1475,8 @@
         }
 
         // ==================== TTS & PLAYBACK ====================
-        // For story mode, we build a "chapter" object with `lines`:
-        // Each line = one original input line, keeping its language so we can
-        // paint English red and French blue on the book page.
+        let countGlobalLinesSoFar = 0;
+
         function buildChapters(rawText) {
             const blocks = rawText
                 .replace(/\r\n/g, '\n')
@@ -1495,17 +1485,11 @@
                 .filter(b => b.length > 0);
 
             const result = [];
-            blocks.forEach((block, i) => {
-                // Split the block into its original lines (single newlines)
+            blocks.forEach((block) => {
                 const rawLines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-                // Recompute language alternation across the WHOLE story
-                // so English is always red and French always blue.
-                // We keep a global counter of lines.
                 const lines = [];
                 rawLines.forEach((lineText) => {
-                    // Global line index determines language
-                    // (English on even indices, French on odd, matching the classic rule)
                     const globalIdx = countGlobalLinesSoFar + lines.length;
                     const isEnglish = globalIdx % 2 === 0;
                     lines.push({
@@ -1515,10 +1499,7 @@
                 });
                 countGlobalLinesSoFar += rawLines.length;
 
-                // Full text for TTS (join with spaces)
                 const fullText = rawLines.join(' ');
-
-                // Language of the block : English if first line is English
                 const blockIsEnglish = lines.length > 0 ? lines[0].isEnglish : true;
 
                 result.push({
@@ -1531,14 +1512,10 @@
             return result;
         }
 
-        // Helper counter used while building chapters
-        let countGlobalLinesSoFar = 0;
-
         function processText() {
             stopSpeech();
             const input = document.getElementById('textInput').value;
 
-            // Classic mode data : line by line
             const lines = input.split('\n').map(l => l.trim()).filter(l => l !== "");
             sentenceData = [];
             lines.forEach((line, index) => {
@@ -1551,7 +1528,6 @@
                 });
             });
 
-            // Story mode : pages made of blocks, each block keeps its lines with language info
             countGlobalLinesSoFar = 0;
             chapters = buildChapters(input);
 
@@ -1583,7 +1559,6 @@
             }
         }
 
-        // ---- STORY PLAYBACK : silent TTS, page stays until user clicks Next ----
         function speakStoryChapter() {
             if (!isPlaying || isPaused) return;
             if (currentPage >= chapters.length) {
@@ -1603,11 +1578,8 @@
             utterance.onend = () => {};
             utterance.onerror = () => {};
             synth.speak(utterance);
-
-            // NO auto-advance. Page changes only via ◀ ▶ buttons.
         }
 
-        // ---- CLASSIC PLAYBACK : line by line ----
         function speakStep() {
             if (!isPlaying || isPaused) return;
             if (currentIndex >= sentenceData.length) {
@@ -1864,7 +1836,8 @@
                 speechSynthesis.onvoiceschanged = () => synth.getVoices();
             }
             document.getElementById('camSizeVal').textContent = camSize;
-            document.getElementById('textColorInput').value = textColor;
+            enColorInput.value = enColor;
+            frColorInput.value = frColor;
         });
 
         window.addEventListener('beforeunload', () => {
