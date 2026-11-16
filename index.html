@@ -363,6 +363,32 @@
             padding: 1px;
             border-radius: 4px;
         }
+
+        /* Words per page number input */
+        .words-per-page-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        .words-per-page-group input[type="number"] {
+            width: 70px;
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent);
+            text-align: center;
+        }
+        .words-per-page-group small {
+            color: #888;
+            font-size: 11px;
+        }
     </style>
 </head>
 <body>
@@ -373,7 +399,7 @@
     </div>
 
     <div class="input-section">
-        <textarea id="textInput" placeholder="Collez votre histoire ici.&#10;Séparez chaque page par une ligne vide (double retour à la ligne).&#10;&#10;Règle bilingue :&#10;• Ligne 1 = Anglais&#10;• Ligne 2 = Français&#10;• etc.&#10;&#10;Tournez les pages manuellement avec ◀ ▶."></textarea>
+        <textarea id="textInput" placeholder="Collez votre histoire ici.&#10;Séparez chaque page par une ligne vide (double retour à la ligne).&#10;&#10;Règle bilingue :&#10;• Ligne 1 = Anglais&#10;• Ligne 2 = Français&#10;• etc.&#10;&#10;Entrez le nombre de mots par page (ex : 20) et chaque page contiendra exactement 20 mots.&#10;Tournez les pages manuellement avec ◀ ▶."></textarea>
         <div class="controls">
             <button id="loadBtn" onclick="processText()">1. Charger l'histoire</button>
             <button id="playBtn" onclick="startPlayAll()" disabled>▶ Lire tout</button>
@@ -385,7 +411,7 @@
             <button id="storyModeBtn" onclick="toggleStoryMode()">📖 STORY : OFF</button>
         </div>
         <div id="statusMsg" class="status-msg"></div>
-        <div class="mute-note">🔇 TTS désactivé · STORY : Couleurs personnalisables EN/FR · Pages manuelles</div>
+        <div class="mute-note">🔇 TTS désactivé · STORY : Nombre exact de mots par page · Pages manuelles</div>
     </div>
 
     <div class="options-bar">
@@ -407,13 +433,20 @@
             </div>
         </label>
 
-        <!-- NEW: Bilingual text colours -->
         <label>🎯 Couleurs :
             <div class="bilingual-colors">
                 <label>EN</label>
                 <input type="color" id="enColorInput" value="#d9534f">
                 <label>FR</label>
                 <input type="color" id="frColorInput" value="#0275d8">
+            </div>
+        </label>
+
+        <!-- NEW: exact number of words per page -->
+        <label>📝 Mots / page :
+            <div class="words-per-page-group">
+                <input type="number" id="wordsPerPageInput" min="1" max="1000" value="20" step="1">
+                <small>mots</small>
             </div>
         </label>
 
@@ -493,9 +526,11 @@
         let currentPage = 0;
         let totalPages = 1;
 
-        // Bilingual colors (customizable)
         let enColor = '#d9534f';
         let frColor = '#0275d8';
+
+        // Exact number of words per page (Story mode)
+        let wordsPerPage = 20;
 
         const DISPLAY_DURATION_MS = 3000;
 
@@ -569,6 +604,9 @@
         const _segInputCtx = _segInput.getContext('2d');
 
         let _lastCompositeTime = 0;
+
+        // Raw input stored so we can rebuild pages when words-per-page changes
+        let rawStoryInput = '';
 
         function setStatus(msg, type = '') {
             const el = document.getElementById('statusMsg');
@@ -957,7 +995,6 @@
             });
         });
 
-        // Bilingual color pickers
         const enColorInput = document.getElementById('enColorInput');
         const frColorInput = document.getElementById('frColorInput');
 
@@ -968,6 +1005,20 @@
         frColorInput.addEventListener('input', (e) => {
             frColor = e.target.value;
             setStatus('🎯 Couleur FRANÇAIS changée', 'info');
+        });
+
+        // Words per page input : rebuild pages live when changed
+        const wordsPerPageInput = document.getElementById('wordsPerPageInput');
+        wordsPerPageInput.addEventListener('change', (e) => {
+            let v = parseInt(e.target.value, 10);
+            if (isNaN(v) || v < 1) v = 1;
+            if (v > 1000) v = 1000;
+            e.target.value = v;
+            wordsPerPage = v;
+            if (rawStoryInput) {
+                rebuildPagesFromRaw();
+                setStatus(`📝 ${wordsPerPage} mots par page · ${chapters.length} pages`, 'info');
+            }
         });
 
         document.getElementById('frameSelect').addEventListener('change', (e) => {
@@ -1038,7 +1089,7 @@
             return lum > 0.6;
         }
 
-        // ========== BOOK PAGE — bilingual colours (customizable) ==========
+        // ========== BOOK PAGE — bilingual, with exact words-per-page ==========
         function drawBookPageOnBoard() {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -1175,7 +1226,7 @@
             }
         }
 
-        // ========== CLASSIC MODE (uses bilingual colours) ==========
+        // ========== CLASSIC MODE ==========
         function drawSentenceOnBoard(item, index, total) {
             const W = boardCanvas.width;
             const H = boardCanvas.height;
@@ -1236,7 +1287,6 @@
             const centerY = isPortrait ? H * 0.42 : H / 2;
             const startY = centerY - (totalHeight / 2) + lineHeight / 2;
 
-            // Classic mode uses the bilingual color for the current sentence
             const textFill = item.isEnglish ? enColor : frColor;
             lines.forEach((line, i) => {
                 boardCtx.fillStyle = textFill;
@@ -1437,7 +1487,7 @@
                     currentPage = 0;
                     updateBookNav();
                 }
-                setStatus('📖 Mode STORY : Couleurs EN/FR personnalisables · Pages manuelles', 'info');
+                setStatus(`📖 Mode STORY : ${wordsPerPage} mots par page · Pages manuelles`, 'info');
             } else {
                 btn.classList.remove('active');
                 btn.innerText = '📖 STORY : OFF';
@@ -1474,48 +1524,93 @@
             }
         }
 
-        // ==================== TTS & PLAYBACK ====================
-        let countGlobalLinesSoFar = 0;
-
-        function buildChapters(rawText) {
-            const blocks = rawText
+        // ==================== PAGINATION BY EXACT WORD COUNT ====================
+        // Strategy:
+        // 1. Walk through the raw input, keeping the language of each line
+        //    (alternating EN / FR by global line index).
+        // 2. Split each line into words.
+        // 3. Accumulate words into pages of exactly `wordsPerPage` words.
+        // 4. When a page is full, start a new page. A line's words can be split
+        //    across two pages if needed, but each page will contain exactly
+        //    `wordsPerPage` words (except possibly the last page).
+        function buildChaptersByWords(rawText, wordsPerPage) {
+            // Build a flat list of words with their language
+            const rawLines = rawText
                 .replace(/\r\n/g, '\n')
-                .split(/\n\s*\n+/)
-                .map(b => b.trim())
-                .filter(b => b.length > 0);
+                .split('\n')
+                .map(l => l.trim())
+                .filter(l => l.length > 0);
 
-            const result = [];
-            blocks.forEach((block) => {
-                const rawLines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-
-                const lines = [];
-                rawLines.forEach((lineText) => {
-                    const globalIdx = countGlobalLinesSoFar + lines.length;
-                    const isEnglish = globalIdx % 2 === 0;
-                    lines.push({
-                        text: lineText,
-                        isEnglish: isEnglish
-                    });
-                });
-                countGlobalLinesSoFar += rawLines.length;
-
-                const fullText = rawLines.join(' ');
-                const blockIsEnglish = lines.length > 0 ? lines[0].isEnglish : true;
-
-                result.push({
-                    text: fullText,
-                    lines: lines,
-                    lang: blockIsEnglish ? 'en-US' : 'fr-FR',
-                    isEnglish: blockIsEnglish
+            const allWords = [];
+            rawLines.forEach((lineText, lineIdx) => {
+                const isEnglish = lineIdx % 2 === 0;
+                const words = lineText.split(/\s+/).filter(w => w.length > 0);
+                words.forEach(w => {
+                    allWords.push({ word: w, isEnglish: isEnglish, lineIdx: lineIdx });
                 });
             });
-            return result;
+
+            if (allWords.length === 0) return [];
+
+            const pages = [];
+            const perPage = Math.max(1, wordsPerPage);
+
+            for (let i = 0; i < allWords.length; i += perPage) {
+                const slice = allWords.slice(i, i + perPage);
+
+                // Group consecutive words by language to form "lines" for colouring
+                const lines = [];
+                let cur = null;
+                slice.forEach(({ word, isEnglish }) => {
+                    if (!cur || cur.isEnglish !== isEnglish) {
+                        if (cur) lines.push(cur);
+                        cur = { text: word, isEnglish: isEnglish };
+                    } else {
+                        cur.text += ' ' + word;
+                    }
+                });
+                if (cur) lines.push(cur);
+
+                // Full text for TTS
+                const fullText = slice.map(w => w.word).join(' ');
+
+                // Language of the page : language of its first word
+                const pageIsEnglish = slice[0].isEnglish;
+
+                pages.push({
+                    text: fullText,
+                    lines: lines,
+                    lang: pageIsEnglish ? 'en-US' : 'fr-FR',
+                    isEnglish: pageIsEnglish,
+                    wordCount: slice.length
+                });
+            }
+
+            return pages;
         }
 
+        function rebuildPagesFromRaw() {
+            chapters = buildChaptersByWords(rawStoryInput, wordsPerPage);
+            totalPages = Math.max(1, chapters.length);
+            if (currentPage >= totalPages) currentPage = totalPages - 1;
+            if (currentPage < 0) currentPage = 0;
+            if (isStoryMode) updateBookNav();
+        }
+
+        // ==================== TTS & PLAYBACK ====================
         function processText() {
             stopSpeech();
             const input = document.getElementById('textInput').value;
+            rawStoryInput = input;
 
+            // Read current words-per-page value
+            let v = parseInt(wordsPerPageInput.value, 10);
+            if (isNaN(v) || v < 1) v = 1;
+            if (v > 1000) v = 1000;
+            wordsPerPage = v;
+            wordsPerPageInput.value = v;
+
+            // Classic mode : line by line
             const lines = input.split('\n').map(l => l.trim()).filter(l => l !== "");
             sentenceData = [];
             lines.forEach((line, index) => {
@@ -1528,14 +1623,14 @@
                 });
             });
 
-            countGlobalLinesSoFar = 0;
-            chapters = buildChapters(input);
+            // Story mode : paginate by exact word count
+            chapters = buildChaptersByWords(input, wordsPerPage);
 
             if (sentenceData.length > 0 || chapters.length > 0) {
                 document.getElementById('playBtn').disabled = false;
                 document.getElementById('recordBtn').disabled = false;
 
-                const msg = `✅ Chargé : ${sentenceData.length} lignes (classique) · ${chapters.length} pages (story)`;
+                const msg = `✅ Chargé : ${sentenceData.length} lignes (classique) · ${chapters.length} pages de ${wordsPerPage} mots (story)`;
                 setStatus(msg, 'success');
 
                 if (isStoryMode) {
@@ -1838,6 +1933,7 @@
             document.getElementById('camSizeVal').textContent = camSize;
             enColorInput.value = enColor;
             frColorInput.value = frColor;
+            wordsPerPageInput.value = wordsPerPage;
         });
 
         window.addEventListener('beforeunload', () => {
